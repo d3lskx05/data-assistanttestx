@@ -43,7 +43,7 @@ if query:
                 if comment and str(comment).strip().lower() != "nan":
                     with st.expander("Комментарий"):
                         st.markdown(comment)
-                st.markdown("---")
+                st.markdown("<hr style='margin:4px 0' />", unsafe_allow_html=True)
         else:
             st.warning("Совпадений не найдено в умном поиске.")
 
@@ -55,7 +55,7 @@ if query:
                 if comment and str(comment).strip().lower() != "nan":
                     with st.expander("Комментарий"):
                         st.markdown(comment)
-                st.markdown("---")
+               st.markdown("<hr style='margin:4px 0' />", unsafe_allow_html=True)
         else:
             st.info("Ничего не найдено в точном поиске.")
 
