@@ -25,10 +25,10 @@ if selected_topics:
     for idx, row in enumerate(filtered_df.itertuples()):
         st.markdown(f"- **{row.phrase_full}** → {', '.join(row.topics)}")
         if row.comment and str(row.comment).strip().lower() != "nan":
-            if st.button("💬 Показать комментарий", key=f"comment_button_{idx}"):
+            with st.expander("💬 Показать комментарий", expanded=False):
                 st.markdown(
                     f"""
-                    <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                    <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:0 0 10px 0; font-size:0.9em; color:#333;">
                         {row.comment}
                     </div>
                     """,
@@ -46,10 +46,10 @@ if query:
             for idx, (score, phrase_full, topics, comment) in enumerate(results):
                 st.markdown(f"- **{phrase_full}** → {', '.join(topics)} (_{score:.2f}_)")
                 if comment and str(comment).strip().lower() != "nan":
-                    if st.button("💬 Показать комментарий", key=f"semantic_comment_button_{idx}"):
+                    with st.expander("💬 Показать комментарий", expanded=False):
                         st.markdown(
                             f"""
-                            <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                            <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:0 0 10px 0; font-size:0.9em; color:#333;">
                                 {comment}
                             </div>
                             """,
@@ -64,10 +64,10 @@ if query:
             for idx, (phrase, topics, comment) in enumerate(exact_results):
                 st.markdown(f"- **{phrase}** → {', '.join(topics)}")
                 if comment and str(comment).strip().lower() != "nan":
-                    if st.button("💬 Показать комментарий", key=f"exact_comment_button_{idx}"):
+                    with st.expander("💬 Показать комментарий", expanded=False):
                         st.markdown(
                             f"""
-                            <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                            <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:0 0 10px 0; font-size:0.9em; color:#333;">
                                 {comment}
                             </div>
                             """,
