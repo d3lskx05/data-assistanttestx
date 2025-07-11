@@ -10,7 +10,7 @@ import functools
 
 @functools.lru_cache(maxsize=1)
 def get_model():
-    return SentenceTransformer('ai-forever/sbert_large_nlu_ru')
+    return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
 @functools.lru_cache(maxsize=1)
 def get_morph():
