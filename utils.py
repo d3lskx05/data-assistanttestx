@@ -44,9 +44,9 @@ for group in SYNONYM_GROUPS:
         SYNONYM_DICT[lemma] = lemmas
 
 GITHUB_CSV_URLS = [
-    "https://raw.githubusercontent.com/d3ld3l/semantic-assistant/main/data4.xlsx",
-    "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
-    "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
+    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data4.xlsx",
+    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data21.xlsx",
+    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data31.xlsx"
 ]
 
 def split_by_slash(phrase):
