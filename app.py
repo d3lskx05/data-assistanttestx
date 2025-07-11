@@ -23,15 +23,7 @@ if selected_topics:
     st.markdown("### 📂 Фразы по выбранным тематикам:")
     filtered_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
     for idx, row in enumerate(filtered_df.itertuples()):
-        st.markdown(
-            f"""
-            <div style="background-color:#ffffff; border-left:5px solid #4B8BF4; padding:12px 16px; margin-bottom:12px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-                <div style="font-weight:600; font-size:16px; margin-bottom:4px;">🗣️ {row.phrase_full}</div>
-                <div style="font-size:13px; color:#666;">🎯 Темы: {', '.join(row.topics)}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown(f"- **{row.phrase_full}** → {', '.join(row.topics)}")
         if row.comment and str(row.comment).strip().lower() != "nan":
             with st.expander("💬 Показать комментарий", expanded=False):
                 st.markdown(
@@ -52,15 +44,7 @@ if query:
         if results:
             st.markdown("### 🔍 Результаты умного поиска:")
             for idx, (score, phrase_full, topics, comment) in enumerate(results):
-                st.markdown(
-                    f"""
-                    <div style="background-color:#ffffff; border-left:5px solid #34A853; padding:12px 16px; margin-bottom:12px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-                        <div style="font-weight:600; font-size:16px; margin-bottom:4px;">🗣️ {phrase_full}</div>
-                        <div style="font-size:13px; color:#666;">🎯 Темы: {', '.join(topics)} | 💯 Рейтинг: {score:.2f}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"- **{phrase_full}** → {', '.join(topics)} (_{score:.2f}_)")
                 if comment and str(comment).strip().lower() != "nan":
                     with st.expander("💬 Показать комментарий", expanded=False):
                         st.markdown(
@@ -78,15 +62,7 @@ if query:
         if exact_results:
             st.markdown("### 🧷 Точный поиск:")
             for idx, (phrase, topics, comment) in enumerate(exact_results):
-                st.markdown(
-                    f"""
-                    <div style="background-color:#ffffff; border-left:5px solid #FBBC05; padding:12px 16px; margin-bottom:12px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-                        <div style="font-weight:600; font-size:16px; margin-bottom:4px;">🗣️ {phrase}</div>
-                        <div style="font-size:13px; color:#666;">🎯 Темы: {', '.join(topics)}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"- **{phrase}** → {', '.join(topics)}")
                 if comment and str(comment).strip().lower() != "nan":
                     with st.expander("💬 Показать комментарий", expanded=False):
                         st.markdown(
