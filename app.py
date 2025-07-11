@@ -22,17 +22,18 @@ selected_topics = st.multiselect("Фильтр по тематикам (неза
 if selected_topics:
     st.markdown("### 📂 Фразы по выбранным тематикам:")
     filtered_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
-    for row in filtered_df.itertuples():
+    for idx, row in enumerate(filtered_df.itertuples()):
         st.markdown(f"- **{row.phrase_full}** → {', '.join(row.topics)}")
         if row.comment and str(row.comment).strip().lower() != "nan":
-            st.markdown(
-                f"""
-                <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
-                    💬 {row.comment}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            if st.button("💬 Показать комментарий", key=f"comment_button_{idx}"):
+                st.markdown(
+                    f"""
+                    <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                        {row.comment}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
 # 📥 Поисковый запрос
 query = st.text_input("Введите ваш запрос:")
@@ -42,34 +43,36 @@ if query:
         results = semantic_search(query, df)
         if results:
             st.markdown("### 🔍 Результаты умного поиска:")
-            for score, phrase_full, topics, comment in results:
+            for idx, (score, phrase_full, topics, comment) in enumerate(results):
                 st.markdown(f"- **{phrase_full}** → {', '.join(topics)} (_{score:.2f}_)")
                 if comment and str(comment).strip().lower() != "nan":
-                    st.markdown(
-                        f"""
-                        <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
-                            💬 {comment}
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                    if st.button("💬 Показать комментарий", key=f"semantic_comment_button_{idx}"):
+                        st.markdown(
+                            f"""
+                            <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                                {comment}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
         else:
             st.warning("Совпадений не найдено в умном поиске.")
 
         exact_results = keyword_search(query, df)
         if exact_results:
             st.markdown("### 🧷 Точный поиск:")
-            for phrase, topics, comment in exact_results:
+            for idx, (phrase, topics, comment) in enumerate(exact_results):
                 st.markdown(f"- **{phrase}** → {', '.join(topics)}")
                 if comment and str(comment).strip().lower() != "nan":
-                    st.markdown(
-                        f"""
-                        <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
-                            💬 {comment}
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                    if st.button("💬 Показать комментарий", key=f"exact_comment_button_{idx}"):
+                        st.markdown(
+                            f"""
+                            <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                                {comment}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
         else:
             st.info("Ничего не найдено в точном поиске.")
 
