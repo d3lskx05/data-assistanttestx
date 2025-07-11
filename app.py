@@ -27,7 +27,7 @@ if selected_topics:
     for row in filtered_df.itertuples():
         st.markdown(f"- **{row.phrase_full}** → {', '.join(row.topics)}")
         if row.comment and str(row.comment).strip().lower() != "nan":
-            with st.expander("Комментарий"):
+            with st.expander("💬 Комментарий", expanded=False):
                 st.markdown(row.comment)
 
 # 📥 Поисковый запрос
@@ -41,7 +41,7 @@ if query:
             for score, phrase_full, topics, comment in results:
                 st.markdown(f"**{phrase_full}** → {', '.join(topics)} (_{score:.2f}_)")
                 if comment and str(comment).strip().lower() != "nan":
-                    with st.expander("Комментарий"):
+                    with st.expander("💬 Комментарий", expanded=False):
                         st.markdown(comment)
                 st.markdown("<hr style='margin:4px 0' />", unsafe_allow_html=True)
         else:
@@ -53,7 +53,7 @@ if query:
             for phrase, topics, comment in exact_results:
                 st.markdown(f"**{phrase}** → {', '.join(topics)}")
                 if comment and str(comment).strip().lower() != "nan":
-                    with st.expander("Комментарий"):
+                    with st.expander("💬 Комментарий", expanded=False):
                         st.markdown(comment)
                 st.markdown("<hr style='margin:4px 0' />", unsafe_allow_html=True)
         else:
