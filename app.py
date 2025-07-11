@@ -27,7 +27,7 @@ if selected_topics:
         if row.comment and str(row.comment).strip().lower() != "nan":
             st.markdown(
                 f"""
-                <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                <div style="background-color:#f0f2f6; padding:10px 14px; border-radius:8px; margin:6px 0 14px 0; font-size:0.9em; color:#333;">
                     💬 {row.comment}
                 </div>
                 """,
@@ -47,7 +47,7 @@ if query:
                 if comment and str(comment).strip().lower() != "nan":
                     st.markdown(
                         f"""
-                        <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                        <div style="background-color:#f0f2f6; padding:10px 14px; border-radius:8px; margin:6px 0 14px 0; font-size:0.9em; color:#333;">
                             💬 {comment}
                         </div>
                         """,
@@ -64,7 +64,7 @@ if query:
                 if comment and str(comment).strip().lower() != "nan":
                     st.markdown(
                         f"""
-                        <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                        <div style="background-color:#f0f2f6; padding:10px 14px; border-radius:8px; margin:6px 0 14px 0; font-size:0.9em; color:#333;">
                             💬 {comment}
                         </div>
                         """,
