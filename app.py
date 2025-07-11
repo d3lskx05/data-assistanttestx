@@ -1,5 +1,3 @@
-# app.py
-
 import streamlit as st
 from utils import load_all_excels, semantic_search, keyword_search
 
@@ -20,15 +18,21 @@ df = get_data()
 all_topics = sorted({topic for topics in df['topics'] for topic in topics})
 selected_topics = st.multiselect("Фильтр по тематикам (независимо от поиска):", all_topics)
 
-# 📌 Независимая фильтрация по темам
+# 📌 Независимая фильтрация по темам (не влияет на поиск)
 if selected_topics:
     st.markdown("### 📂 Фразы по выбранным тематикам:")
     filtered_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
     for row in filtered_df.itertuples():
         st.markdown(f"- **{row.phrase_full}** → {', '.join(row.topics)}")
         if row.comment and str(row.comment).strip().lower() != "nan":
-            with st.expander("💬 Комментарий", expanded=False):
-                st.markdown(row.comment)
+            st.markdown(
+                f"""
+                <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                    💬 {row.comment}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
 # 📥 Поисковый запрос
 query = st.text_input("Введите ваш запрос:")
@@ -39,11 +43,16 @@ if query:
         if results:
             st.markdown("### 🔍 Результаты умного поиска:")
             for score, phrase_full, topics, comment in results:
-                st.markdown(f"**{phrase_full}** → {', '.join(topics)} (_{score:.2f}_)")
+                st.markdown(f"- **{phrase_full}** → {', '.join(topics)} (_{score:.2f}_)")
                 if comment and str(comment).strip().lower() != "nan":
-                    with st.expander("💬 Комментарий", expanded=False):
-                        st.markdown(comment)
-                st.markdown("<hr style='margin:4px 0' />", unsafe_allow_html=True)
+                    st.markdown(
+                        f"""
+                        <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                            💬 {comment}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
         else:
             st.warning("Совпадений не найдено в умном поиске.")
 
@@ -51,11 +60,16 @@ if query:
         if exact_results:
             st.markdown("### 🧷 Точный поиск:")
             for phrase, topics, comment in exact_results:
-                st.markdown(f"**{phrase}** → {', '.join(topics)}")
+                st.markdown(f"- **{phrase}** → {', '.join(topics)}")
                 if comment and str(comment).strip().lower() != "nan":
-                    with st.expander("💬 Комментарий", expanded=False):
-                        st.markdown(comment)
-                st.markdown("<hr style='margin:4px 0' />", unsafe_allow_html=True)
+                    st.markdown(
+                        f"""
+                        <div style="background-color:#f0f2f6; padding:8px 12px; border-radius:10px; margin:-5px 0 10px 0; font-size:0.9em; color:#333;">
+                            💬 {comment}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
         else:
             st.info("Ничего не найдено в точном поиске.")
 
