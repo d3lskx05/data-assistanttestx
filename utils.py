@@ -1,63 +1,138 @@
-# app.py
+# utils.py
 
-import streamlit as st
-from utils import load_all_excels, semantic_search, keyword_search
+import pandas as pd
+import requests
+import re
+from io import BytesIO
+from sentence_transformers import SentenceTransformer, util
+import pymorphy2
+import functools
 
-st.set_page_config(page_title="Semantic Assistant", layout="centered")
-st.title("🤖 Semantic Assistant")
+@functools.lru_cache(maxsize=1)
+def get_model():
+    return SentenceTransformer('ai-forever/sbert_large_nlu_ru')
 
-@st.cache_data
-def get_data():
-    df = load_all_excels()
-    from utils import get_model
+@functools.lru_cache(maxsize=1)
+def get_morph():
+    return pymorphy2.MorphAnalyzer()
+
+def preprocess(text):
+    text = str(text).lower().strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+def lemmatize(word):
+    return get_morph().parse(word)[0].normal_form
+
+@functools.lru_cache(maxsize=10000)
+def lemmatize_cached(word):
+    return lemmatize(word)
+
+SYNONYM_GROUPS = [
+    ["сим", "симка", "симкарта", "сим-карта", "сим-карте", "симке", "симку", "симки"],
+    ["кредитка", "кредитная карта", "кредитной картой"],
+    ["наличные", "наличка", "наличными"],
+    ["дебетовка", "дебетовая"],
+    ["приложение", "кабинет"],
+    ["утеря", "потерял", "утерял", "потеря"]
+]
+
+SYNONYM_DICT = {}
+for group in SYNONYM_GROUPS:
+    lemmas = {lemmatize(w.lower()) for w in group}
+    for lemma in lemmas:
+        SYNONYM_DICT[lemma] = lemmas
+
+GITHUB_CSV_URLS = [
+    "https://raw.githubusercontent.com/codxqqq/semantic-assistant/main/data4.xlsx",
+    "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
+    "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
+]
+
+def split_by_slash(phrase):
+    parts = [p.strip() for p in str(phrase).split("/") if p.strip()]
+    return parts if parts else [phrase]
+
+def load_excel(url):
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise ValueError(f"Ошибка загрузки {url}")
+    df = pd.read_excel(BytesIO(response.content))
+
+    topic_cols = [col for col in df.columns if col.lower().startswith("topics")]
+    if not topic_cols:
+        raise KeyError("Не найдены колонки topics")
+
+    df['topics'] = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != 'nan'], axis=1)
+    df['phrase_full'] = df['phrase']
+    df['phrase_list'] = df['phrase'].apply(split_by_slash)
+    df = df.explode('phrase_list', ignore_index=True)
+    df['phrase'] = df['phrase_list']
+    df['phrase_proc'] = df['phrase'].apply(preprocess)
+    df['phrase_lemmas'] = df['phrase_proc'].apply(
+        lambda text: {lemmatize_cached(w) for w in re.findall(r"\w+", text)}
+    )
+    
+    # Если есть колонка comment — добавляем
+    if 'comment' not in df.columns:
+        df['comment'] = ""
+        
+    return df[['phrase', 'phrase_proc', 'phrase_full', 'phrase_lemmas', 'topics', 'comment']]
+
+def load_all_excels():
+    dfs = []
+    for url in GITHUB_CSV_URLS:
+        try:
+            dfs.append(load_excel(url))
+        except Exception as e:
+            print(f"⚠️ Ошибка с {url}: {e}")
+    if not dfs:
+        raise ValueError("Не удалось загрузить ни одного файла")
+    return pd.concat(dfs, ignore_index=True)
+
+def semantic_search(query, df, top_k=5, threshold=0.5):
     model = get_model()
-    df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
-    return df
+    query_proc = preprocess(query)
+    query_emb = model.encode(query_proc, convert_to_tensor=True)
 
-df = get_data()
+    if 'phrase_embs' not in df.attrs:
+        df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
 
-# 🔘 Все уникальные тематики
-all_topics = sorted({topic for topics in df['topics'] for topic in topics})
-selected_topics = st.multiselect("Фильтр по тематикам (независимо от поиска):", all_topics)
+    phrase_embs = df.attrs['phrase_embs']
+    sims = util.pytorch_cos_sim(query_emb, phrase_embs)[0]
+    results = [
+        (float(score), df.iloc[idx]['phrase_full'], df.iloc[idx]['topics'], df.iloc[idx]['comment'])
+        for idx, score in enumerate(sims) if float(score) >= threshold
+    ]
+    return sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
 
-# 📌 Независимая фильтрация по темам
-if selected_topics:
-    st.markdown("### 📂 Фразы по выбранным тематикам:")
-    filtered_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
-    for row in filtered_df.itertuples():
-        st.markdown(f"- **{row.phrase_full}** → {', '.join(row.topics)}")
-        if row.comment and str(row.comment).strip().lower() != "nan":
-            with st.expander("💬 Комментарий", expanded=False):
-                st.markdown(row.comment)
+def keyword_search(query, df):
+    query_proc = preprocess(query)
+    query_words = re.findall(r"\w+", query_proc)
+    query_lemmas = [lemmatize_cached(word) for word in query_words]
 
-# 📥 Поисковый запрос
-query = st.text_input("Введите ваш запрос:")
+    matched = []
+    for row in df.itertuples():
+        phrase_lemmas = row.phrase_lemmas
+        if all(
+            any(ql in SYNONYM_DICT.get(pl, {pl}) for pl in phrase_lemmas)
+            for ql in query_lemmas
+        ):
+            matched.append((row.phrase_full, row.topics, row.comment))
+    return matched
 
-if query:
-    try:
-        results = semantic_search(query, df)
-        if results:
-            st.markdown("### 🔍 Результаты умного поиска:")
-            for score, phrase_full, topics, comment in results:
-                st.markdown(f"**{phrase_full}** → {', '.join(topics)} (_{score:.2f}_)")
-                if comment and str(comment).strip().lower() != "nan":
-                    with st.expander("💬 Комментарий", expanded=False):
-                        st.markdown(comment)
-                st.markdown("<hr style='margin:4px 0' />", unsafe_allow_html=True)
-        else:
-            st.warning("Совпадений не найдено в умном поиске.")
+def filter_by_topics(results, selected_topics):
+    if not selected_topics:
+        return results
 
-        exact_results = keyword_search(query, df)
-        if exact_results:
-            st.markdown("### 🧷 Точный поиск:")
-            for phrase, topics, comment in exact_results:
-                st.markdown(f"**{phrase}** → {', '.join(topics)}")
-                if comment and str(comment).strip().lower() != "nan":
-                    with st.expander("💬 Комментарий", expanded=False):
-                        st.markdown(comment)
-                st.markdown("<hr style='margin:4px 0' />", unsafe_allow_html=True)
-        else:
-            st.info("Ничего не найдено в точном поиске.")
-
-    except Exception as e:
-        st.error(f"Ошибка при обработке запроса: {e}")
+    filtered = []
+    for item in results:
+        if isinstance(item, tuple) and len(item) == 4:
+            score, phrase, topics, comment = item
+            if set(topics) & set(selected_topics):
+                filtered.append((score, phrase, topics, comment))
+        elif isinstance(item, tuple) and len(item) == 3:
+            phrase, topics, comment = item
+            if set(topics) & set(selected_topics):
+                filtered.append((phrase, topics, comment))
+    return filtered
