@@ -1,0 +1,8 @@
+# requirements.txt
+streamlit
+pandas
+openpyxl
+sentence-transformers
+requests
+pymorphy2
+gdown
