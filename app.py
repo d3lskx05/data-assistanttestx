@@ -25,9 +25,9 @@ if selected_topics:
     for idx, row in enumerate(filtered_df.itertuples()):
         st.markdown(
             f"""
-            <div style="background-color:#ffffff; border:1px solid #e0e0e0; padding:16px; border-radius:12px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-                <div style="font-size:1.1em; font-weight:600; margin-bottom:6px;">{row.phrase_full}</div>
-                <div style="color:#888; font-size:0.85em;">Темы: {', '.join(row.topics)}</div>
+            <div style="background-color:#ffffff; border-left:5px solid #4B8BF4; padding:12px 16px; margin-bottom:12px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+                <div style="font-weight:600; font-size:16px; margin-bottom:4px;">🗣️ {row.phrase_full}</div>
+                <div style="font-size:13px; color:#666;">🎯 Темы: {', '.join(row.topics)}</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -54,10 +54,9 @@ if query:
             for idx, (score, phrase_full, topics, comment) in enumerate(results):
                 st.markdown(
                     f"""
-                    <div style="background-color:#ffffff; border:1px solid #e0e0e0; padding:16px; border-radius:12px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-                        <div style="font-size:1.1em; font-weight:600; margin-bottom:6px;">{phrase_full}</div>
-                        <div style="color:#888; font-size:0.85em;">Темы: {', '.join(topics)}</div>
-                        <div style="color:#bbb; font-size:0.75em; margin-top:4px;">Score: {score:.2f}</div>
+                    <div style="background-color:#ffffff; border-left:5px solid #34A853; padding:12px 16px; margin-bottom:12px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+                        <div style="font-weight:600; font-size:16px; margin-bottom:4px;">🗣️ {phrase_full}</div>
+                        <div style="font-size:13px; color:#666;">🎯 Темы: {', '.join(topics)} | 💯 Рейтинг: {score:.2f}</div>
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -81,9 +80,9 @@ if query:
             for idx, (phrase, topics, comment) in enumerate(exact_results):
                 st.markdown(
                     f"""
-                    <div style="background-color:#ffffff; border:1px solid #e0e0e0; padding:16px; border-radius:12px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-                        <div style="font-size:1.1em; font-weight:600; margin-bottom:6px;">{phrase}</div>
-                        <div style="color:#888; font-size:0.85em;">Темы: {', '.join(topics)}</div>
+                    <div style="background-color:#ffffff; border-left:5px solid #FBBC05; padding:12px 16px; margin-bottom:12px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+                        <div style="font-weight:600; font-size:16px; margin-bottom:4px;">🗣️ {phrase}</div>
+                        <div style="font-size:13px; color:#666;">🎯 Темы: {', '.join(topics)}</div>
                     </div>
                     """,
                     unsafe_allow_html=True
