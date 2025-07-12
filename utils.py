@@ -114,18 +114,20 @@ def keyword_search(query, df):
     matched = []
     for row in df.itertuples():
         phrase_lemmas = row.phrase_lemmas
+        phrase_proc = row.phrase_proc
 
-        # Расширяем множество лемм синонимами
-        extended_lemmas = set()
-        for pl in phrase_lemmas:
-            extended_lemmas.update(SYNONYM_DICT.get(pl, {pl}))
-
-        # Сравниваем по вхождению каждой леммы запроса в любую из расширенных лемм фразы
-        if all(
-            any(ql in pl for pl in extended_lemmas)
+        # 1. Совпадение по леммам и синонимам
+        lemma_match = all(
+            any(ql in SYNONYM_DICT.get(pl, {pl}) for pl in phrase_lemmas)
             for ql in query_lemmas
-        ):
+        )
+
+        # 2. Или хотя бы одно частичное совпадение
+        partial_match = all(q in phrase_proc for q in query_words)
+
+        if lemma_match or partial_match:
             matched.append((row.phrase_full, row.topics, row.comment))
+
     return matched
 
 def filter_by_topics(results, selected_topics):
