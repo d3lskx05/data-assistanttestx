@@ -1,5 +1,3 @@
-# utils.py
-
 import pandas as pd
 import requests
 import re
@@ -10,7 +8,22 @@ import functools
 
 @functools.lru_cache(maxsize=1)
 def get_model():
-    return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+    import os
+    import zipfile
+    import gdown
+    from sentence_transformers import SentenceTransformer
+
+    model_path = "fine_tuned_model"
+    model_zip = "fine_tuned_model.zip"
+    file_id = "1FWJO5DFRL6bAH1nSxPmu4DFpcc64ZQWu"  # ← ЗАМЕНИ ЭТО НА СВОЙ ID
+
+    if not os.path.exists(model_path):
+        gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
+
+        with zipfile.ZipFile(model_zip, 'r') as zip_ref:
+            zip_ref.extractall(model_path)
+
+    return SentenceTransformer(model_path)
 
 @functools.lru_cache(maxsize=1)
 def get_morph():
@@ -73,7 +86,6 @@ def load_excel(url):
         lambda text: {lemmatize_cached(w) for w in re.findall(r"\w+", text)}
     )
     
-    # Если есть колонка comment — добавляем
     if 'comment' not in df.columns:
         df['comment'] = ""
         
@@ -116,13 +128,11 @@ def keyword_search(query, df):
         phrase_lemmas = row.phrase_lemmas
         phrase_proc = row.phrase_proc
 
-        # 1. Совпадение по леммам и синонимам
         lemma_match = all(
             any(ql in SYNONYM_DICT.get(pl, {pl}) for pl in phrase_lemmas)
             for ql in query_lemmas
         )
 
-        # 2. Или хотя бы одно частичное совпадение
         partial_match = all(q in phrase_proc for q in query_words)
 
         if lemma_match or partial_match:
