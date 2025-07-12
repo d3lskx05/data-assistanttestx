@@ -115,13 +115,14 @@ def keyword_search(query, df):
     for row in df.itertuples():
         phrase_lemmas = row.phrase_lemmas
 
-        # ✅ Добавлена поддержка поиска по части слова
-        # Совпадение происходит, если каждая лемма запроса частично входит в любую из лемм фразы
+        # Расширяем множество лемм синонимами
+        extended_lemmas = set()
+        for pl in phrase_lemmas:
+            extended_lemmas.update(SYNONYM_DICT.get(pl, {pl}))
+
+        # Сравниваем по вхождению каждой леммы запроса в любую из расширенных лемм фразы
         if all(
-            any(
-                ql in pl or any(ql in syn for syn in SYNONYM_DICT.get(pl, {pl}))
-                for pl in phrase_lemmas
-            )
+            any(ql in pl for pl in extended_lemmas)
             for ql in query_lemmas
         ):
             matched.append((row.phrase_full, row.topics, row.comment))
