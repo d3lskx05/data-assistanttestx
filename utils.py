@@ -114,8 +114,14 @@ def keyword_search(query, df):
     matched = []
     for row in df.itertuples():
         phrase_lemmas = row.phrase_lemmas
+
+        # ✅ Добавлена поддержка поиска по части слова
+        # Совпадение происходит, если каждая лемма запроса частично входит в любую из лемм фразы
         if all(
-            any(ql in SYNONYM_DICT.get(pl, {pl}) for pl in phrase_lemmas)
+            any(
+                ql in pl or any(ql in syn for syn in SYNONYM_DICT.get(pl, {pl}))
+                for pl in phrase_lemmas
+            )
             for ql in query_lemmas
         ):
             matched.append((row.phrase_full, row.topics, row.comment))
