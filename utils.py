@@ -15,7 +15,7 @@ def get_model():
 
     model_path = "fine_tuned_model"
     model_zip = "fine_tuned_model.zip"
-    file_id = "1AbCdEfGhIjKlMnOpQrStUvWxyz"  # ← ЗАМЕНИ ЭТО НА СВОЙ ID
+    file_id = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # ← ЗАМЕНИ ЭТО НА СВОЙ ID
 
     if not os.path.exists(model_path):
         gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
