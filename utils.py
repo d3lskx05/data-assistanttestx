@@ -60,29 +60,30 @@ GITHUB_CSV_URLS = [
 def split_by_slash(phrase):
     phrase = phrase.strip()
 
-    # Если нет слэша — разбиваем по альтернативному разделителю "|"
-    if '/' not in phrase:
-        return [p.strip() for p in phrase.split("|") if p.strip()]
+    # Сначала разделим по альтернативному разделителю "|"
+    phrase_parts = [p.strip() for p in phrase.split("|") if p.strip()]
+    result = []
 
-    parts = [p.strip() for p in phrase.split("/") if p.strip()]
+    for part in phrase_parts:
+        if "/" not in part:
+            result.append(part)
+            continue
 
-    # Попробуем восстановить контекст, если фраза вида: X Y/Z W
-    if len(parts) == 2:
-        # Попробуем выделить общий контекст: (до), слово1 / слово2, (после)
-        pattern = re.compile(r"^(.*\b)?(\w+)\s*/\s*(\w+)(\b.*)?$")
-        m = pattern.match(phrase)
-        if m:
-            prefix = (m.group(1) or "").strip()
-            first = m.group(2).strip()
-            second = m.group(3).strip()
-            suffix = (m.group(4) or "").strip()
-            res = []
-            res.append(" ".join(filter(None, [prefix, first, suffix])))
-            res.append(" ".join(filter(None, [prefix, second, suffix])))
-            return res
+        # Попробуем найти общий префикс до первого слова со слэшем
+        match = re.match(r"^(.*?)(\b[\w\s]+\b\s*/.+)$", part)
+        if match:
+            prefix = match.group(1).strip()
+            segment_str = match.group(2)
+            segments = [s.strip() for s in segment_str.split("/") if s.strip()]
+            for s in segments:
+                combined = f"{prefix} {s}".strip()
+                result.append(re.sub(r"\s+", " ", combined))
+        else:
+            # Если не получилось восстановить контекст — просто разбиваем по "/"
+            segments = [s.strip() for s in part.split("/") if s.strip()]
+            result.extend(segments)
 
-    # Если не удалось восстановить контекст — возвращаем просто части
-    return parts
+    return result
 
 def load_excel(url):
     response = requests.get(url)
