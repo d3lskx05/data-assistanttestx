@@ -58,8 +58,19 @@ GITHUB_CSV_URLS = [
 ]
 
 def split_by_slash(phrase):
+    # Разделение по слэшу
     parts = [p.strip() for p in str(phrase).split("/") if p.strip()]
-    return parts if parts else [phrase]
+
+    # Далее разделим каждую часть по запятой — это остаётся в рамках одной записи
+    expanded_parts = []
+    for part in parts:
+        sub_parts = [sp.strip() for sp in part.split(",") if sp.strip()]
+        if len(sub_parts) > 1:
+            expanded_parts.extend(sub_parts)
+        else:
+            expanded_parts.append(part)
+
+    return expanded_parts if expanded_parts else [phrase]
 
 def load_excel(url):
     response = requests.get(url)
