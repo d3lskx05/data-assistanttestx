@@ -60,40 +60,29 @@ GITHUB_CSV_URLS = [
 def split_by_slash(phrase):
     phrase = phrase.strip()
 
-    # Сначала делим по | если нет /
+    # Если нет слэша — разбиваем по альтернативному разделителю "|"
     if '/' not in phrase:
         return [p.strip() for p in phrase.split("|") if p.strip()]
-    
-    # Делим по слэшу
+
     parts = [p.strip() for p in phrase.split("/") if p.strip()]
-    
-    if len(parts) <= 1:
-        return parts
 
-    # Найдём общий префикс — всё до последнего слова первого фрагмента
-    first_words = parts[0].split()
-    if len(first_words) < 2:
-        return parts  # ничего не делать, если слишком короткая база
+    # Попробуем восстановить контекст, если фраза вида: X Y/Z W
+    if len(parts) == 2:
+        # Попробуем выделить общий контекст: (до), слово1 / слово2, (после)
+        pattern = re.compile(r"^(.*\b)?(\w+)\s*/\s*(\w+)(\b.*)?$")
+        m = pattern.match(phrase)
+        if m:
+            prefix = (m.group(1) or "").strip()
+            first = m.group(2).strip()
+            second = m.group(3).strip()
+            suffix = (m.group(4) or "").strip()
+            res = []
+            res.append(" ".join(filter(None, [prefix, first, suffix])))
+            res.append(" ".join(filter(None, [prefix, second, suffix])))
+            return res
 
-    prefix = " ".join(first_words[:-1])  # всё до последнего слова
-    base_last = first_words[-1]          # последнее слово первого фрагмента
-
-    results = []
-
-    for i, part in enumerate(parts):
-        part_words = part.split()
-        
-        # Если первая часть — добавляем как есть
-        if i == 0:
-            results.append(part)
-        elif len(part_words) == 1:
-            # Только одно слово — вставляем в конец префикса
-            results.append(f"{prefix} {part}")
-        else:
-            # Если хвост полноценный — добавляем как есть
-            results.append(part)
-
-    return results
+    # Если не удалось восстановить контекст — возвращаем просто части
+    return parts
 
 def load_excel(url):
     response = requests.get(url)
