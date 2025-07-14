@@ -60,18 +60,40 @@ GITHUB_CSV_URLS = [
 def split_by_slash(phrase):
     phrase = phrase.strip()
 
-    # Обработка по | (альтернатива запятой)
+    # Сначала делим по | если нет /
     if '/' not in phrase:
         return [p.strip() for p in phrase.split("|") if p.strip()]
-
+    
+    # Делим по слэшу
     parts = [p.strip() for p in phrase.split("/") if p.strip()]
+    
+    if len(parts) <= 1:
+        return parts
 
-    # Если есть общий хвост, достраиваем
-    if len(parts) >= 2 and len(parts[-1].split()) > 1:
-        tail = " " + " ".join(parts[-1].split()[1:])
-        return [p + tail for p in parts]
+    # Найдём общий префикс — всё до последнего слова первого фрагмента
+    first_words = parts[0].split()
+    if len(first_words) < 2:
+        return parts  # ничего не делать, если слишком короткая база
 
-    return parts
+    prefix = " ".join(first_words[:-1])  # всё до последнего слова
+    base_last = first_words[-1]          # последнее слово первого фрагмента
+
+    results = []
+
+    for i, part in enumerate(parts):
+        part_words = part.split()
+        
+        # Если первая часть — добавляем как есть
+        if i == 0:
+            results.append(part)
+        elif len(part_words) == 1:
+            # Только одно слово — вставляем в конец префикса
+            results.append(f"{prefix} {part}")
+        else:
+            # Если хвост полноценный — добавляем как есть
+            results.append(part)
+
+    return results
 
 def load_excel(url):
     response = requests.get(url)
