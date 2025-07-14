@@ -59,31 +59,32 @@ GITHUB_CSV_URLS = [
 
 def split_by_slash(phrase):
     phrase = phrase.strip()
+    parts = []
 
-    # Сначала разделим по альтернативному разделителю "|"
-    phrase_parts = [p.strip() for p in phrase.split("|") if p.strip()]
-    result = []
-
-    for part in phrase_parts:
-        if "/" not in part:
-            result.append(part)
-            continue
-
-        # Попробуем найти общий префикс до первого слова со слэшем
-        match = re.match(r"^(.*?)(\b[\w\s]+\b\s*/.+)$", part)
-        if match:
-            prefix = match.group(1).strip()
-            segment_str = match.group(2)
-            segments = [s.strip() for s in segment_str.split("/") if s.strip()]
-            for s in segments:
-                combined = f"{prefix} {s}".strip()
-                result.append(re.sub(r"\s+", " ", combined))
+    # Сначала разбиваем по "|"
+    for segment in phrase.split("|"):
+        segment = segment.strip()
+        # Если есть "/", пытаемся восстановить контекст
+        if "/" in segment:
+            tokens = [p.strip() for p in segment.split("/") if p.strip()]
+            # Пытаемся выделить общий контекст, если их 2
+            if len(tokens) == 2:
+                pattern = re.compile(r"^(.*\b)?(\w+)\s*/\s*(\w+)(\b.*)?$")
+                m = pattern.match(segment)
+                if m:
+                    prefix = (m.group(1) or "").strip()
+                    first = m.group(2).strip()
+                    second = m.group(3).strip()
+                    suffix = (m.group(4) or "").strip()
+                    parts.append(" ".join(filter(None, [prefix, first, suffix])))
+                    parts.append(" ".join(filter(None, [prefix, second, suffix])))
+                    continue
+            # Если не удалось — просто добавим как есть
+            parts.extend(tokens)
         else:
-            # Если не получилось восстановить контекст — просто разбиваем по "/"
-            segments = [s.strip() for s in part.split("/") if s.strip()]
-            result.extend(segments)
-
-    return result
+            parts.append(segment)
+    
+    return [p for p in parts if p]
 
 def load_excel(url):
     response = requests.get(url)
