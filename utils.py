@@ -59,19 +59,20 @@ GITHUB_CSV_URLS = [
 
 def split_by_slash(phrase):
     phrase = phrase.strip()
+
+    # Если нет слеша, обрабатываем только разделение по "|"
+    if '/' not in phrase:
+        return [p.strip() for p in phrase.split("|") if p.strip()]
+
     parts = [p.strip() for p in phrase.split("/") if p.strip()]
 
-    # Если одна часть длинная, а остальные — короткие, достраиваем полные фразы
+    # Если первая часть длинная, а остальные короткие – достраиваем хвосты
     if len(parts) >= 2 and len(parts[0].split()) >= 2:
         head_words = parts[0].split()
         head_prefix = " ".join(head_words[:-1])  # всё кроме последнего слова
-        last_word = head_words[-1]
-
-        # Пример: ["Снять деньги в офисе", "кассе", "у операциониста"]
-        # → ["Снять деньги в офисе", "Снять деньги в кассе", "Снять деньги у операциониста"]
         results = [parts[0]]
         for tail in parts[1:]:
-            reconstructed = f"{head_prefix} {tail}"
+            reconstructed = f"{head_prefix} {tail.strip()}"
             results.append(reconstructed)
         return results
 
