@@ -182,9 +182,13 @@ def filter_by_topics(results, selected_topics):
     if not selected_topics:
         return deduplicate_results(results)
 
+    # Удалим дубликаты сначала
+    unique = deduplicate_results(results)
+
+    # Затем фильтруем
     filtered = []
-    for item in results:
+    for item in unique:
         topics = item[2] if len(item) == 4 else item[1]
         if set(topics) & set(selected_topics):
             filtered.append(item)
-    return deduplicate_results(filtered)
+    return filtered
