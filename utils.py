@@ -11,7 +11,6 @@ def get_model():
     import os
     import zipfile
     import gdown
-    from sentence_transformers import SentenceTransformer
 
     model_path = "fine_tuned_model"
     model_zip = "fine_tuned_model.zip"
