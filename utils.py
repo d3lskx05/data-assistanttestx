@@ -6,6 +6,8 @@ from sentence_transformers import SentenceTransformer, util
 import pymorphy2
 import functools
 
+# ---------- модель и морфологический разбор ----------
+
 @functools.lru_cache(maxsize=1)
 def get_model():
     import os
@@ -13,14 +15,13 @@ def get_model():
     import gdown
 
     model_path = "fine_tuned_model"
-    model_zip = "fine_tuned_model.zip"
-    file_id = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # ← ЗАМЕНИ ЭТО НА СВОЙ ID
+    model_zip  = "fine_tuned_model.zip"
+    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # при необходимости замените
 
     if not os.path.exists(model_path):
         gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
-
-        with zipfile.ZipFile(model_zip, 'r') as zip_ref:
-            zip_ref.extractall(model_path)
+        with zipfile.ZipFile(model_zip, 'r') as zf:
+            zf.extractall(model_path)
 
     return SentenceTransformer(model_path)
 
@@ -28,10 +29,10 @@ def get_model():
 def get_morph():
     return pymorphy2.MorphAnalyzer()
 
+# ---------- служебные функции ----------
+
 def preprocess(text):
-    text = str(text).lower().strip()
-    text = re.sub(r"\s+", " ", text)
-    return text
+    return re.sub(r"\s+", " ", str(text).lower().strip())
 
 def lemmatize(word):
     return get_morph().parse(word)[0].normal_form
@@ -40,9 +41,7 @@ def lemmatize(word):
 def lemmatize_cached(word):
     return lemmatize(word)
 
-SYNONYM_GROUPS = [
-
-]
+SYNONYM_GROUPS = []
 
 SYNONYM_DICT = {}
 for group in SYNONYM_GROUPS:
@@ -56,58 +55,57 @@ GITHUB_CSV_URLS = [
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
 
-def split_by_slash(phrase):
+def split_by_slash(phrase: str):
     phrase = phrase.strip()
-    parts = []
-
+    parts  = []
     for segment in phrase.split("|"):
         segment = segment.strip()
         if "/" in segment:
             tokens = [p.strip() for p in segment.split("/") if p.strip()]
             if len(tokens) == 2:
-                pattern = re.compile(r"^(.*?\b)?(\w+)\s*/\s*(\w+)(\b.*?)?$")
-                m = pattern.match(segment)
+                m = re.match(r"^(.*?\b)?(\w+)\s*/\s*(\w+)(\b.*?)?$", segment)
                 if m:
                     prefix = (m.group(1) or "").strip()
-                    first = m.group(2).strip()
+                    first  = m.group(2).strip()
                     second = m.group(3).strip()
                     suffix = (m.group(4) or "").strip()
-                    parts.append(" ".join(filter(None, [prefix, first, suffix])))
+                    parts.append(" ".join(filter(None, [prefix, first,  suffix])))
                     parts.append(" ".join(filter(None, [prefix, second, suffix])))
                     continue
             parts.extend(tokens)
         else:
             parts.append(segment)
-
     return [p for p in parts if p]
 
-def load_excel(url):
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise ValueError(f"Ошибка загрузки {url}")
-    df = pd.read_excel(BytesIO(response.content))
+# ---------- загрузка данных ----------
 
-    topic_cols = [col for col in df.columns if col.lower().startswith("topics")]
+def load_excel(url):
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        raise ValueError(f"Ошибка загрузки {url}")
+
+    df = pd.read_excel(BytesIO(resp.content))
+    topic_cols = [c for c in df.columns if c.lower().startswith("topics")]
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
 
-    df['topics'] = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != 'nan'], axis=1)
-    df['phrase_full'] = df['phrase']
-    df['phrase_list'] = df['phrase'].apply(split_by_slash)
-    df = df.explode('phrase_list', ignore_index=True)
-    df['phrase'] = df['phrase_list']
-    df['phrase_proc'] = df['phrase'].apply(preprocess)
-    df['phrase_lemmas'] = df['phrase_proc'].apply(
-        lambda text: {lemmatize_cached(w) for w in re.findall(r"\w+", text)}
+    df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
+    df["phrase_full"] = df["phrase"]
+    df["phrase_list"] = df["phrase"].apply(split_by_slash)
+    df                = df.explode("phrase_list", ignore_index=True)
+    df["phrase"]      = df["phrase_list"]
+    df["phrase_proc"] = df["phrase"].apply(preprocess)
+    df["phrase_lemmas"] = df["phrase_proc"].apply(
+        lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
     )
 
     model = get_model()
-    df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
+    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
 
-    if 'comment' not in df.columns:
-        df['comment'] = ""
+    if "comment" not in df.columns:
+        df["comment"] = ""
 
-    return df[['phrase', 'phrase_proc', 'phrase_full', 'phrase_lemmas', 'topics', 'comment']]
+    return df[["phrase", "phrase_proc", "phrase_full", "phrase_lemmas", "topics", "comment"]]
 
 def load_all_excels():
     dfs = []
@@ -120,59 +118,65 @@ def load_all_excels():
         raise ValueError("Не удалось загрузить ни одного файла")
     return pd.concat(dfs, ignore_index=True)
 
+# ---------- удаление дублей ----------
+
+def _score_of(item):
+    """Возвращает числовой score из кортежа результата."""
+    return item[0] if len(item) == 4 else 1.0
+
+def _phrase_full_of(item):
+    """Возвращает phrase_full из кортежа результата."""
+    return item[1] if len(item) == 4 else item[0]
+
 def deduplicate_results(results):
     """
-    Удаляет дубли по phrase_full, оставляя наиболее релевантный.
+    Удаляет дубликаты по phrase_full, сохраняя кортеж в исходном формате
+    (4‑элемента для semantic, 3‑элемента для keyword) и оставляя
+    наиболее высокий score при коллизии.
     """
     best = {}
     for item in results:
-        if len(item) == 4:
-            score, phrase_full, topics, comment = item
-        elif len(item) == 3:
-            phrase_full, topics, comment = item
-            score = 1.0
-        else:
-            continue
+        key   = _phrase_full_of(item)
+        score = _score_of(item)
 
-        if phrase_full not in best or score > best[phrase_full][0]:
-            best[phrase_full] = (score, phrase_full, topics, comment)
-
+        if key not in best or score > _score_of(best[key]):
+            best[key] = item
     return list(best.values())
 
-def semantic_search(query, df, top_k=5, threshold=0.5):
-    model = get_model()
-    query_proc = preprocess(query)
-    query_emb = model.encode(query_proc, convert_to_tensor=True)
+# ---------- поиск ----------
 
-    phrase_embs = df.attrs['phrase_embs']
+def semantic_search(query, df, top_k=5, threshold=0.5):
+    model       = get_model()
+    query_proc  = preprocess(query)
+    query_emb   = model.encode(query_proc, convert_to_tensor=True)
+    phrase_embs = df.attrs["phrase_embs"]
+
     sims = util.pytorch_cos_sim(query_emb, phrase_embs)[0]
     results = [
-        (float(score), df.iloc[idx]['phrase_full'], df.iloc[idx]['topics'], df.iloc[idx]['comment'])
+        (float(score), df.iloc[idx]["phrase_full"], df.iloc[idx]["topics"], df.iloc[idx]["comment"])
         for idx, score in enumerate(sims) if float(score) >= threshold
     ]
-    return deduplicate_results(sorted(results, key=lambda x: x[0], reverse=True))[:top_k]
+    results = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
+    return deduplicate_results(results)
 
 def keyword_search(query, df):
-    query_proc = preprocess(query)
+    query_proc  = preprocess(query)
     query_words = re.findall(r"\w+", query_proc)
-    query_lemmas = [lemmatize_cached(word) for word in query_words]
+    query_lemmas = [lemmatize_cached(w) for w in query_words]
 
     matched = []
     for row in df.itertuples():
-        phrase_lemmas = row.phrase_lemmas
-        phrase_proc = row.phrase_proc
-
         lemma_match = all(
-            any(ql in SYNONYM_DICT.get(pl, {pl}) for pl in phrase_lemmas)
+            any(ql in SYNONYM_DICT.get(pl, {pl}) for pl in row.phrase_lemmas)
             for ql in query_lemmas
         )
-
-        partial_match = all(q in phrase_proc for q in query_words)
-
+        partial_match = all(q in row.phrase_proc for q in query_words)
         if lemma_match or partial_match:
             matched.append((row.phrase_full, row.topics, row.comment))
 
     return deduplicate_results(matched)
+
+# ---------- фильтрация ----------
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
@@ -180,13 +184,7 @@ def filter_by_topics(results, selected_topics):
 
     filtered = []
     for item in results:
-        if isinstance(item, tuple) and len(item) == 4:
-            score, phrase, topics, comment = item
-            if set(topics) & set(selected_topics):
-                filtered.append((score, phrase, topics, comment))
-        elif isinstance(item, tuple) and len(item) == 3:
-            phrase, topics, comment = item
-            if set(topics) & set(selected_topics):
-                filtered.append((phrase, topics, comment))
-
+        topics = item[2] if len(item) == 4 else item[1]
+        if set(topics) & set(selected_topics):
+            filtered.append(item)
     return deduplicate_results(filtered)
