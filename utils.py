@@ -183,24 +183,14 @@ def filter_by_topics(results, selected_topics):
         return deduplicate_results(results)
 
     filtered = []
-    seen = set()
-
     for item in results:
         if len(item) == 4:
-            score, phrase, topics, comment = item
-        else:
-            phrase, topics, comment = item
-            score = 1.0  # или 0.0, если нужно
+            score, phrase_full, topics, comment = item
+            if any(topic in selected_topics for topic in topics):
+                filtered.append((score, phrase_full, topics, comment))
+        elif len(item) == 3:
+            phrase_full, topics, comment = item
+            if any(topic in selected_topics for topic in topics):
+                filtered.append((phrase_full, topics, comment))
 
-        if set(topics) & set(selected_topics):
-            key = (phrase, tuple(sorted(topics)), comment)
-            if key not in seen:
-                seen.add(key)
-                if len(item) == 4:
-                    filtered.append((score, phrase, topics, comment))
-                else:
-                    filtered.append((phrase, topics, comment))
-
-    return filtered
-
-
+    return deduplicate_results(filtered)
