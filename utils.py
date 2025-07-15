@@ -60,7 +60,6 @@ def split_by_slash(phrase):
     phrase = phrase.strip()
     parts = []
 
-    # Разбивка по |
     for segment in phrase.split("|"):
         segment = segment.strip()
         if "/" in segment:
@@ -102,7 +101,6 @@ def load_excel(url):
         lambda text: {lemmatize_cached(w) for w in re.findall(r"\w+", text)}
     )
 
-    # Считаем эмбеддинги заранее
     model = get_model()
     df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
 
@@ -122,6 +120,25 @@ def load_all_excels():
         raise ValueError("Не удалось загрузить ни одного файла")
     return pd.concat(dfs, ignore_index=True)
 
+def deduplicate_results(results):
+    """
+    Удаляет дубли по phrase_full, оставляя наиболее релевантный.
+    """
+    best = {}
+    for item in results:
+        if len(item) == 4:
+            score, phrase_full, topics, comment = item
+        elif len(item) == 3:
+            phrase_full, topics, comment = item
+            score = 1.0
+        else:
+            continue
+
+        if phrase_full not in best or score > best[phrase_full][0]:
+            best[phrase_full] = (score, phrase_full, topics, comment)
+
+    return list(best.values())
+
 def semantic_search(query, df, top_k=5, threshold=0.5):
     model = get_model()
     query_proc = preprocess(query)
@@ -133,7 +150,7 @@ def semantic_search(query, df, top_k=5, threshold=0.5):
         (float(score), df.iloc[idx]['phrase_full'], df.iloc[idx]['topics'], df.iloc[idx]['comment'])
         for idx, score in enumerate(sims) if float(score) >= threshold
     ]
-    return sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
+    return deduplicate_results(sorted(results, key=lambda x: x[0], reverse=True))[:top_k]
 
 def keyword_search(query, df):
     query_proc = preprocess(query)
@@ -155,11 +172,11 @@ def keyword_search(query, df):
         if lemma_match or partial_match:
             matched.append((row.phrase_full, row.topics, row.comment))
 
-    return matched
+    return deduplicate_results(matched)
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
-        return results
+        return deduplicate_results(results)
 
     filtered = []
     for item in results:
@@ -171,4 +188,5 @@ def filter_by_topics(results, selected_topics):
             phrase, topics, comment = item
             if set(topics) & set(selected_topics):
                 filtered.append((phrase, topics, comment))
-    return filtered
+
+    return deduplicate_results(filtered)
