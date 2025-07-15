@@ -180,17 +180,17 @@ def keyword_search(query, df):
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
-        return deduplicate_results(results)
+        return results  # ⚠️ ВАЖНО: без повторного deduplication
 
     filtered = []
     for item in results:
         if len(item) == 4:
             score, phrase_full, topics, comment = item
-            if any(topic in selected_topics for topic in topics):
+            if any(topic in topics for topic in selected_topics):
                 filtered.append((score, phrase_full, topics, comment))
         elif len(item) == 3:
             phrase_full, topics, comment = item
-            if any(topic in selected_topics for topic in topics):
+            if any(topic in topics for topic in selected_topics):
                 filtered.append((phrase_full, topics, comment))
 
-    return deduplicate_results(filtered)
+    return filtered  # ⚠️ Без deduplicate_results
