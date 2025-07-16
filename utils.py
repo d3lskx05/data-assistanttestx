@@ -16,7 +16,7 @@ def get_model():
 
     model_path = "fine_tuned_model"
     model_zip  = "fine_tuned_model.zip"
-    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # при необходимости замените
+    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"
 
     if not os.path.exists(model_path):
         gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
@@ -121,24 +121,16 @@ def load_all_excels():
 # ---------- удаление дублей ----------
 
 def _score_of(item):
-    """Возвращает числовой score из кортежа результата."""
     return item[0] if len(item) == 4 else 1.0
 
 def _phrase_full_of(item):
-    """Возвращает phrase_full из кортежа результата."""
     return item[1] if len(item) == 4 else item[0]
 
 def deduplicate_results(results):
-    """
-    Удаляет дубликаты по phrase_full, сохраняя кортеж в исходном формате
-    (4‑элемента для semantic, 3‑элемента для keyword) и оставляя
-    наиболее высокий score при коллизии.
-    """
     best = {}
     for item in results:
         key   = _phrase_full_of(item)
         score = _score_of(item)
-
         if key not in best or score > _score_of(best[key]):
             best[key] = item
     return list(best.values())
@@ -180,9 +172,11 @@ def keyword_search(query, df):
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
-        return results  # Не дедуплируем повторно
+        return results
 
     filtered = []
+    selected_topics_set = set(selected_topics)
+
     for item in results:
         if len(item) == 4:
             score, phrase_full, topics, comment = item
@@ -190,20 +184,21 @@ def filter_by_topics(results, selected_topics):
             phrase_full, topics, comment = item
             score = None
         else:
-            continue  # Пропускаем некорректный формат
+            continue  # некорректный формат
 
-        # Приводим topics к списку, если нужно
+        # Приводим topics к списку строк
         if isinstance(topics, str):
             topics = [topics]
         elif not isinstance(topics, list):
             topics = list(topics)
 
-        # Проверка наличия хотя бы одной совпадающей темы
-        if set(topics) & set(selected_topics):
+        # Удаляем "nan", пустые строки и пробелы
+        topics = [t.strip() for t in topics if t and t.strip().lower() != "nan"]
+
+        if selected_topics_set & set(topics):
             if score is not None:
                 filtered.append((score, phrase_full, topics, comment))
             else:
                 filtered.append((phrase_full, topics, comment))
 
-    return filtered  # Не вызываем deduplicate_results
-
+    return deduplicate_results(filtered)
