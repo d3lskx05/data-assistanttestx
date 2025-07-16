@@ -170,6 +170,8 @@ def keyword_search(query, df):
 
 # ---------- фильтрация ----------
 
+import ast
+
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
         return results
@@ -186,14 +188,17 @@ def filter_by_topics(results, selected_topics):
         else:
             continue  # некорректный формат
 
-        # Приводим topics к списку строк
+        # Безопасно парсим строку вида "['a', 'b']" в список
         if isinstance(topics, str):
-            topics = [topics]
+            try:
+                topics = ast.literal_eval(topics)
+            except Exception:
+                topics = [topics]
         elif not isinstance(topics, list):
             topics = list(topics)
 
-        # Удаляем "nan", пустые строки и пробелы
-        topics = [t.strip() for t in topics if t and t.strip().lower() != "nan"]
+        # Чистим пустые и 'nan'
+        topics = [t.strip() for t in topics if t and str(t).strip().lower() != "nan"]
 
         if selected_topics_set & set(topics):
             if score is not None:
