@@ -170,6 +170,8 @@ def keyword_search(query, df):
 
 # ---------- фильтрация ----------
 
+# ---------- фильтрация ----------
+
 import ast
 
 def filter_by_topics(results, selected_topics):
@@ -195,15 +197,18 @@ def filter_by_topics(results, selected_topics):
             except Exception:
                 topics = [topics]
         elif not isinstance(topics, list):
-            topics = list(topics)
+            try:
+                topics = list(topics)
+            except Exception:
+                topics = [str(topics)]
 
-        # Чистим пустые и 'nan'
-        topics = [t.strip() for t in topics if t and str(t).strip().lower() != "nan"]
+        # Чистим от пустых, nan и лишних пробелов
+        cleaned_topics = {str(t).strip() for t in topics if str(t).strip().lower() != "nan" and str(t).strip()}
 
-        if selected_topics_set & set(topics):
+        if selected_topics_set & cleaned_topics:
             if score is not None:
-                filtered.append((score, phrase_full, topics, comment))
+                filtered.append((score, phrase_full, list(cleaned_topics), comment))
             else:
-                filtered.append((phrase_full, topics, comment))
+                filtered.append((phrase_full, list(cleaned_topics), comment))
 
     return deduplicate_results(filtered)
