@@ -89,11 +89,16 @@ def load_excel(url):
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
 
-    df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
-    df["phrase_full"] = df["phrase"]
+    df["topics"] = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
+
+    # Обработка фраз
+    df["phrase"] = df["phrase"].astype(str)  # ← защита от NaN
     df["phrase_list"] = df["phrase"].apply(split_by_slash)
-    df                = df.explode("phrase_list", ignore_index=True)
-    df["phrase"]      = df["phrase_list"]
+    df = df.explode("phrase_list", ignore_index=True)
+    df["phrase"] = df["phrase_list"]
+    df["phrase_full"] = df["phrase"]  # ← теперь стоит после explode, всё ок
+
+    # Обработка текста
     df["phrase_proc"] = df["phrase"].apply(preprocess)
     df["phrase_lemmas"] = df["phrase_proc"].apply(
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
