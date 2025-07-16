@@ -5,23 +5,44 @@ from io import BytesIO
 from sentence_transformers import SentenceTransformer, util
 import pymorphy2
 import functools
+import logging
+from logging.handlers import RotatingFileHandler
+import os
+
+# ---------- логгирование ----------
+
+LOG_FILENAME = "log.txt"
+os.makedirs(os.path.dirname(LOG_FILENAME) or ".", exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[
+        RotatingFileHandler(LOG_FILENAME, maxBytes=1000000, backupCount=3),
+        logging.StreamHandler()
+    ],
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 # ---------- модель и морфологический разбор ----------
 
 @functools.lru_cache(maxsize=1)
 def get_model():
-    import os
     import zipfile
     import gdown
 
     model_path = "fine_tuned_model"
     model_zip  = "fine_tuned_model.zip"
-    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # при необходимости замените
+    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"
 
     if not os.path.exists(model_path):
+        logger.info("Скачивание модели из Google Drive...")
         gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
         with zipfile.ZipFile(model_zip, 'r') as zf:
             zf.extractall(model_path)
+        logger.info("Модель успешно распакована.")
+    else:
+        logger.info("Модель уже существует локально.")
 
     return SentenceTransformer(model_path)
 
@@ -80,6 +101,7 @@ def split_by_slash(phrase: str):
 # ---------- загрузка данных ----------
 
 def load_excel(url):
+    logger.info(f"Загрузка файла: {url}")
     resp = requests.get(url)
     if resp.status_code != 200:
         raise ValueError(f"Ошибка загрузки {url}")
@@ -89,12 +111,16 @@ def load_excel(url):
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
 
-    df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
-    df["phrase_full"] = df["phrase"]
-    df["phrase_list"] = df["phrase"].apply(split_by_slash)
-    df                = df.explode("phrase_list", ignore_index=True)
-    df["phrase"]      = df["phrase_list"]
-    df["phrase_proc"] = df["phrase"].apply(preprocess)
+    # Обработка NaN/None/пустых значений в "phrase"
+    df["phrase"] = df["phrase"].fillna("").astype(str).str.strip()
+    df = df[df["phrase"] != ""]  # удалим пустые строки
+
+    df["topics"]        = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
+    df["phrase_full"]   = df["phrase"]
+    df["phrase_list"]   = df["phrase"].apply(split_by_slash)
+    df                  = df.explode("phrase_list", ignore_index=True)
+    df["phrase"]        = df["phrase_list"].fillna("").astype(str).str.strip()
+    df["phrase_proc"]   = df["phrase"].apply(preprocess)
     df["phrase_lemmas"] = df["phrase_proc"].apply(
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
     )
@@ -105,6 +131,7 @@ def load_excel(url):
     if "comment" not in df.columns:
         df["comment"] = ""
 
+    logger.info(f"Файл успешно загружен: {url}, записей: {len(df)}")
     return df[["phrase", "phrase_proc", "phrase_full", "phrase_lemmas", "topics", "comment"]]
 
 def load_all_excels():
@@ -113,7 +140,7 @@ def load_all_excels():
         try:
             dfs.append(load_excel(url))
         except Exception as e:
-            print(f"⚠️ Ошибка с {url}: {e}")
+            logger.error(f"⚠️ Ошибка при загрузке {url}: {e}")
     if not dfs:
         raise ValueError("Не удалось загрузить ни одного файла")
     return pd.concat(dfs, ignore_index=True)
@@ -121,24 +148,16 @@ def load_all_excels():
 # ---------- удаление дублей ----------
 
 def _score_of(item):
-    """Возвращает числовой score из кортежа результата."""
     return item[0] if len(item) == 4 else 1.0
 
 def _phrase_full_of(item):
-    """Возвращает phrase_full из кортежа результата."""
     return item[1] if len(item) == 4 else item[0]
 
 def deduplicate_results(results):
-    """
-    Удаляет дубликаты по phrase_full, сохраняя кортеж в исходном формате
-    (4‑элемента для semantic, 3‑элемента для keyword) и оставляя
-    наиболее высокий score при коллизии.
-    """
     best = {}
     for item in results:
         key   = _phrase_full_of(item)
         score = _score_of(item)
-
         if key not in best or score > _score_of(best[key]):
             best[key] = item
     return list(best.values())
@@ -146,6 +165,7 @@ def deduplicate_results(results):
 # ---------- поиск ----------
 
 def semantic_search(query, df, top_k=5, threshold=0.5):
+    logger.info(f"Semantic поиск: '{query}'")
     model       = get_model()
     query_proc  = preprocess(query)
     query_emb   = model.encode(query_proc, convert_to_tensor=True)
@@ -157,11 +177,13 @@ def semantic_search(query, df, top_k=5, threshold=0.5):
         for idx, score in enumerate(sims) if float(score) >= threshold
     ]
     results = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
+    logger.info(f"Semantic найдено: {len(results)} результатов")
     return deduplicate_results(results)
 
 def keyword_search(query, df):
-    query_proc  = preprocess(query)
-    query_words = re.findall(r"\w+", query_proc)
+    logger.info(f"Keyword поиск: '{query}'")
+    query_proc   = preprocess(query)
+    query_words  = re.findall(r"\w+", query_proc)
     query_lemmas = [lemmatize_cached(w) for w in query_words]
 
     matched = []
@@ -174,13 +196,14 @@ def keyword_search(query, df):
         if lemma_match or partial_match:
             matched.append((row.phrase_full, row.topics, row.comment))
 
+    logger.info(f"Keyword найдено: {len(matched)} результатов")
     return deduplicate_results(matched)
 
 # ---------- фильтрация ----------
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
-        return results  # ⚠️ ВАЖНО: без повторного deduplication
+        return results
 
     filtered = []
     for item in results:
@@ -193,4 +216,4 @@ def filter_by_topics(results, selected_topics):
             if any(topic in topics for topic in selected_topics):
                 filtered.append((phrase_full, topics, comment))
 
-    return filtered  # ⚠️ Без deduplicate_results
+    return filtered
