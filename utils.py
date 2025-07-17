@@ -89,11 +89,16 @@ def load_excel(url):
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
 
-    df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
-    df["phrase_full"] = df["phrase"]
+    df["topics"] = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
+
+    # Обработка фраз
+    df["phrase"] = df["phrase"].astype(str)  # ← защита от NaN
     df["phrase_list"] = df["phrase"].apply(split_by_slash)
-    df                = df.explode("phrase_list", ignore_index=True)
-    df["phrase"]      = df["phrase_list"]
+    df = df.explode("phrase_list", ignore_index=True)
+    df["phrase"] = df["phrase_list"]
+    df["phrase_full"] = df["phrase"]  # ← теперь стоит после explode, всё ок
+
+    # Обработка текста
     df["phrase_proc"] = df["phrase"].apply(preprocess)
     df["phrase_lemmas"] = df["phrase_proc"].apply(
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
@@ -180,17 +185,16 @@ def keyword_search(query, df):
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
-        return results  # ⚠️ ВАЖНО: без повторного deduplication
+        return results
 
     filtered = []
     for item in results:
-        if len(item) == 4:
-            score, phrase_full, topics, comment = item
-            if any(topic in topics for topic in selected_topics):
-                filtered.append((score, phrase_full, topics, comment))
-        elif len(item) == 3:
-            phrase_full, topics, comment = item
-            if any(topic in topics for topic in selected_topics):
-                filtered.append((phrase_full, topics, comment))
-
-    return filtered  # ⚠️ Без deduplicate_results
+        if isinstance(item, tuple) and len(item) == 4:
+            score, phrase, topics, comment = item
+            if set(topics) & set(selected_topics):
+                filtered.append((score, phrase, topics, comment))
+        elif isinstance(item, tuple) and len(item) == 3:
+            phrase, topics, comment = item
+            if set(topics) & set(selected_topics):
+                filtered.append((phrase, topics, comment))
+    return filtered
