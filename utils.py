@@ -104,8 +104,15 @@ def load_excel(url):
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
     )
 
+    # Группировка по phrase_full: берём по одной подфразе для эмбеддинга
+    dedup_df = df.drop_duplicates(subset=["phrase_full"]).copy()
     model = get_model()
-    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
+    dedup_df["embedding"] = list(model.encode(dedup_df["phrase_proc"].tolist(), convert_to_tensor=True))
+
+    # Присваиваем эмбеддинги всем строкам по phrase_full
+    emb_map = dict(zip(dedup_df["phrase_full"], dedup_df["embedding"]))
+    df["embedding"] = df["phrase_full"].map(emb_map)
+    df.attrs["phrase_embs"] = list(df["embedding"])
 
     if "comment" not in df.columns:
         df["comment"] = ""
