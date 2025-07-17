@@ -89,30 +89,18 @@ def load_excel(url):
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
 
-    df["topics"] = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
-
-    # Обработка фраз
-    df["phrase"] = df["phrase"].astype(str)           # ← защита от NaN
-    df["phrase_full"] = df["phrase"]                  # ← сохраняем оригинальную фразу ДО разбиения
+    df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
+    df["phrase_full"] = df["phrase"]
     df["phrase_list"] = df["phrase"].apply(split_by_slash)
-    df = df.explode("phrase_list", ignore_index=True)
-    df["phrase"] = df["phrase_list"]                  # ← используем подфразу для обработки и поиска
-
-    # Обработка текста
+    df                = df.explode("phrase_list", ignore_index=True)
+    df["phrase"]      = df["phrase_list"]
     df["phrase_proc"] = df["phrase"].apply(preprocess)
     df["phrase_lemmas"] = df["phrase_proc"].apply(
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
     )
 
-    # Группировка по phrase_full: берём по одной подфразе для эмбеддинга
-    dedup_df = df.drop_duplicates(subset=["phrase_full"]).copy()
     model = get_model()
-    dedup_df["embedding"] = list(model.encode(dedup_df["phrase_proc"].tolist(), convert_to_tensor=True))
-
-    # Присваиваем эмбеддинги всем строкам по phrase_full
-    emb_map = dict(zip(dedup_df["phrase_full"], dedup_df["embedding"]))
-    df["embedding"] = df["phrase_full"].map(emb_map)
-    df.attrs["phrase_embs"] = list(df["embedding"])
+    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
 
     if "comment" not in df.columns:
         df["comment"] = ""
@@ -133,16 +121,24 @@ def load_all_excels():
 # ---------- удаление дублей ----------
 
 def _score_of(item):
+    """Возвращает числовой score из кортежа результата."""
     return item[0] if len(item) == 4 else 1.0
 
 def _phrase_full_of(item):
+    """Возвращает phrase_full из кортежа результата."""
     return item[1] if len(item) == 4 else item[0]
 
 def deduplicate_results(results):
+    """
+    Удаляет дубликаты по phrase_full, сохраняя кортеж в исходном формате
+    (4‑элемента для semantic, 3‑элемента для keyword) и оставляя
+    наиболее высокий score при коллизии.
+    """
     best = {}
     for item in results:
         key   = _phrase_full_of(item)
         score = _score_of(item)
+
         if key not in best or score > _score_of(best[key]):
             best[key] = item
     return list(best.values())
@@ -156,12 +152,20 @@ def semantic_search(query, df, top_k=5, threshold=0.5):
     phrase_embs = df.attrs["phrase_embs"]
 
     sims = util.pytorch_cos_sim(query_emb, phrase_embs)[0]
+
+    # Собираем все результаты выше порога
     results = [
         (float(score), df.iloc[idx]["phrase_full"], df.iloc[idx]["topics"], df.iloc[idx]["comment"])
         for idx, score in enumerate(sims) if float(score) >= threshold
     ]
+
+    # Удаляем дубликаты по phrase_full, оставляя максимальный score
+    results = deduplicate_results(results)
+
+    # Сортируем и берём top_k
     results = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-    return deduplicate_results(results)
+
+    return results
 
 def keyword_search(query, df):
     query_proc  = preprocess(query)
@@ -184,16 +188,17 @@ def keyword_search(query, df):
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
-        return results
+        return results  # ⚠️ ВАЖНО: без повторного deduplication
 
     filtered = []
     for item in results:
-        if isinstance(item, tuple) and len(item) == 4:
-            score, phrase, topics, comment = item
-            if set(topics) & set(selected_topics):
-                filtered.append((score, phrase, topics, comment))
-        elif isinstance(item, tuple) and len(item) == 3:
-            phrase, topics, comment = item
-            if set(topics) & set(selected_topics):
-                filtered.append((phrase, topics, comment))
-    return filtered
+        if len(item) == 4:
+            score, phrase_full, topics, comment = item
+            if any(topic in topics for topic in selected_topics):
+                filtered.append((score, phrase_full, topics, comment))
+        elif len(item) == 3:
+            phrase_full, topics, comment = item
+            if any(topic in topics for topic in selected_topics):
+                filtered.append((phrase_full, topics, comment))
+
+    return filtered  # ⚠️ Без deduplicate_results
