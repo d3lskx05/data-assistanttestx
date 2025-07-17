@@ -44,23 +44,18 @@ def lemmatize_cached(word):
 SYNONYM_GROUPS = []
 
 SYNONYM_DICT = {}
-if SYNONYM_GROUPS:  # защита от пустого списка
-    for group in SYNONYM_GROUPS:
-        lemmas = {lemmatize(w.lower()) for w in group}
-        for lemma in lemmas:
-            SYNONYM_DICT[lemma] = lemmas
+for group in SYNONYM_GROUPS:
+    lemmas = {lemmatize(w.lower()) for w in group}
+    for lemma in lemmas:
+        SYNONYM_DICT[lemma] = lemmas
 
 GITHUB_CSV_URLS = [
     "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data4.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
-    "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx",
+    "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
 
 def split_by_slash(phrase: str):
-    """
-    Разбивает конструкцию вида:
-      'потерял симку/номер|сим карту' -> ['потерял симку', 'потерял номер', 'сим карту']
-    """
     phrase = phrase.strip()
     parts  = []
     for segment in phrase.split("|"):
@@ -68,7 +63,6 @@ def split_by_slash(phrase: str):
         if "/" in segment:
             tokens = [p.strip() for p in segment.split("/") if p.strip()]
             if len(tokens) == 2:
-                # Попытка восстановить общий префикс/суффикс
                 m = re.match(r"^(.*?\b)?(\w+)\s*/\s*(\w+)(\b.*?)?$", segment)
                 if m:
                     prefix = (m.group(1) or "").strip()
@@ -78,7 +72,6 @@ def split_by_slash(phrase: str):
                     parts.append(" ".join(filter(None, [prefix, first,  suffix])))
                     parts.append(" ".join(filter(None, [prefix, second, suffix])))
                     continue
-            # fallback: просто берём всё, что слева/справа от /
             parts.extend(tokens)
         else:
             parts.append(segment)
@@ -92,34 +85,18 @@ def load_excel(url):
         raise ValueError(f"Ошибка загрузки {url}")
 
     df = pd.read_excel(BytesIO(resp.content))
-
-    # Проверки на обязательные колонки
-    if "phrase" not in df.columns:
-         raise KeyError("Не найдена колонка 'phrase' в файле.")
     topic_cols = [c for c in df.columns if c.lower().startswith("topics")]
     if not topic_cols:
-        raise KeyError("Не найдены колонки topics*")
+        raise KeyError("Не найдены колонки topics")
 
-    # Список тем
-    df["topics"] = df[topic_cols].agg(lambda x: [v for v in x if pd.notna(v) and str(v).strip()], axis=1)
+    df["topics"] = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
 
-    # Сохраняем оригинал
-    df["phrase"] = df["phrase"].astype(str)  # защита от NaN
-    df["raw_phrase"] = df["phrase"]          # 👈 оригинал до разбиения
-
-    # Разбиваем на подфразы
+    # Обработка фраз
+    df["phrase"] = df["phrase"].astype(str)           # ← защита от NaN
+    df["phrase_full"] = df["phrase"]                  # ← сохраняем оригинальную фразу ДО разбиения
     df["phrase_list"] = df["phrase"].apply(split_by_slash)
     df = df.explode("phrase_list", ignore_index=True)
-
-    # Подфраза, по которой ищем
-    df["phrase_sub"] = df["phrase_list"].fillna("").astype(str).str.strip()
-
-    # Отбрасываем пустые
-    df = df[df["phrase_sub"] != ""].reset_index(drop=True)
-
-    # Полезные поля
-    df["phrase"] = df["phrase_sub"]      # совместимость с остальным кодом
-    df["phrase_full"] = df["raw_phrase"] # 👈 показываем в выдаче оригинал (с / и |)
+    df["phrase"] = df["phrase_list"]                  # ← используем подфразу для обработки и поиска
 
     # Обработка текста
     df["phrase_proc"] = df["phrase"].apply(preprocess)
@@ -127,11 +104,9 @@ def load_excel(url):
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
     )
 
-    # Эмбеддинги по подфразам
     model = get_model()
     df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
 
-    # Комментарий
     if "comment" not in df.columns:
         df["comment"] = ""
 
@@ -151,48 +126,18 @@ def load_all_excels():
 # ---------- удаление дублей ----------
 
 def _score_of(item):
-    """Возвращает числовой score из кортежа результата."""
     return item[0] if len(item) == 4 else 1.0
 
 def _phrase_full_of(item):
-    """Возвращает phrase_full из кортежа результата."""
     return item[1] if len(item) == 4 else item[0]
 
-def _topics_of(item):
-    return item[2] if len(item) == 4 else item[1]
-
-def _comment_of(item):
-    return item[3] if len(item) == 4 else item[2]
-
-def deduplicate_results(results, merge_topics=True, merge_comments=True):
-    """
-    Удаляет дубликаты по phrase_full. Если merge_topics=True,
-    объединяет списки тем из разных записей одного raw_phrase.
-    """
+def deduplicate_results(results):
     best = {}
     for item in results:
         key   = _phrase_full_of(item)
         score = _score_of(item)
-        if key not in best:
+        if key not in best or score > _score_of(best[key]):
             best[key] = item
-        else:
-            # Выбираем лучший по score
-            if score > _score_of(best[key]):
-                best[key] = item
-            # Обновляем темы/комментарий при желании
-            if merge_topics:
-                merged_topics = list({*map(str, _topics_of(best[key])), *map(str, _topics_of(item))})
-                if len(best[key]) == 4:
-                    best[key] = ( _score_of(best[key]), key, merged_topics, _comment_of(best[key]) )
-                else:
-                    best[key] = ( key, merged_topics, _comment_of(best[key]) )
-            if merge_comments and _comment_of(item) and _comment_of(item) not in _comment_of(best[key]):
-                if len(best[key]) == 4:
-                    best[key] = ( _score_of(best[key]), key, _topics_of(best[key]),
-                                  (_comment_of(best[key]) + " | " + _comment_of(item)).strip(" |") )
-                else:
-                    best[key] = ( key, _topics_of(best[key]),
-                                  (_comment_of(best[key]) + " | " + _comment_of(item)).strip(" |") )
     return list(best.values())
 
 # ---------- поиск ----------
@@ -204,29 +149,20 @@ def semantic_search(query, df, top_k=5, threshold=0.5):
     phrase_embs = df.attrs["phrase_embs"]
 
     sims = util.pytorch_cos_sim(query_emb, phrase_embs)[0]
-
-    # Собираем кандидатов
-    cand = []
-    for idx, score in enumerate(sims):
-        score_f = float(score)
-        if score_f >= threshold:
-            row = df.iloc[idx]
-            cand.append((score_f, row["phrase_full"], row["topics"], row["comment"]))
-
-    # Сортируем/ограничиваем
-    cand = sorted(cand, key=lambda x: x[0], reverse=True)[:top_k * 4]  # берём чуть больше перед дедупом
-
-    # Дедуп по исходной фразе
-    return deduplicate_results(cand)
+    results = [
+        (float(score), df.iloc[idx]["phrase_full"], df.iloc[idx]["topics"], df.iloc[idx]["comment"])
+        for idx, score in enumerate(sims) if float(score) >= threshold
+    ]
+    results = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
+    return deduplicate_results(results)
 
 def keyword_search(query, df):
-    query_proc   = preprocess(query)
-    query_words  = re.findall(r"\w+", query_proc)
+    query_proc  = preprocess(query)
+    query_words = re.findall(r"\w+", query_proc)
     query_lemmas = [lemmatize_cached(w) for w in query_words]
 
     matched = []
     for row in df.itertuples():
-        # row.phrase_lemmas: set
         lemma_match = all(
             any(ql in SYNONYM_DICT.get(pl, {pl}) for pl in row.phrase_lemmas)
             for ql in query_lemmas
@@ -242,18 +178,15 @@ def keyword_search(query, df):
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
         return results
-    sel = set(selected_topics)
 
     filtered = []
     for item in results:
         if isinstance(item, tuple) and len(item) == 4:
             score, phrase, topics, comment = item
-            topics_list = topics if isinstance(topics, (list, tuple, set)) else [topics]
-            if sel & set(topics_list):
+            if set(topics) & set(selected_topics):
                 filtered.append((score, phrase, topics, comment))
         elif isinstance(item, tuple) and len(item) == 3:
             phrase, topics, comment = item
-            topics_list = topics if isinstance(topics, (list, tuple, set)) else [topics]
-            if sel & set(topics_list):
+            if set(topics) & set(selected_topics):
                 filtered.append((phrase, topics, comment))
     return filtered
