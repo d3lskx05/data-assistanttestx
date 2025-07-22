@@ -106,7 +106,7 @@ df["phrase_list"] = df["phrase"].apply(split_if_needed)
     )
 
     model = get_model()
-    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
+    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=False)
 
     if "comment" not in df.columns:
         df["comment"] = ""
