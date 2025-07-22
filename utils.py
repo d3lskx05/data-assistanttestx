@@ -16,7 +16,7 @@ def get_model():
 
     model_path = "fine_tuned_model"
     model_zip  = "fine_tuned_model.zip"
-    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"
+    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # при необходимости замените
 
     if not os.path.exists(model_path):
         gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
@@ -50,7 +50,7 @@ for group in SYNONYM_GROUPS:
         SYNONYM_DICT[lemma] = lemmas
 
 GITHUB_CSV_URLS = [
-    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data3.xlsx",
+    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data4.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
@@ -91,14 +91,7 @@ def load_excel(url):
 
     df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
     df["phrase_full"] = df["phrase"]
-
-    def split_if_needed(phrase):
-        phrase = str(phrase).strip()
-        if '/' in phrase or '|' in phrase:
-            return split_by_slash(phrase)
-        return [phrase]
-
-    df["phrase_list"] = df["phrase"].apply(split_if_needed)
+    df["phrase_list"] = df["phrase"].apply(split_by_slash)
     df                = df.explode("phrase_list", ignore_index=True)
     df["phrase"]      = df["phrase_list"]
     df["phrase_proc"] = df["phrase"].apply(preprocess)
@@ -107,7 +100,7 @@ def load_excel(url):
     )
 
     model = get_model()
-    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=False)
+    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
 
     if "comment" not in df.columns:
         df["comment"] = ""
@@ -128,12 +121,19 @@ def load_all_excels():
 # ---------- удаление дублей ----------
 
 def _score_of(item):
+    """Возвращает числовой score из кортежа результата."""
     return item[0] if len(item) == 4 else 1.0
 
 def _phrase_full_of(item):
+    """Возвращает phrase_full из кортежа результата."""
     return item[1] if len(item) == 4 else item[0]
 
 def deduplicate_results(results):
+    """
+    Удаляет дубликаты по phrase_full, сохраняя кортеж в исходном формате
+    (4‑элемента для semantic, 3‑элемента для keyword) и оставляя
+    наиболее высокий score при коллизии.
+    """
     best = {}
     for item in results:
         key   = _phrase_full_of(item)
@@ -148,17 +148,21 @@ def deduplicate_results(results):
 def semantic_search(query, df, top_k=5, threshold=0.5):
     model       = get_model()
     query_proc  = preprocess(query)
-    query_emb   = model.encode(query_proc, convert_to_tensor=False)
+    query_emb   = model.encode(query_proc, convert_to_tensor=True)
     phrase_embs = df.attrs["phrase_embs"]
 
-    sims = util.cos_sim(query_emb, phrase_embs)[0]
+    sims = util.pytorch_cos_sim(query_emb, phrase_embs)[0]
 
+    # Собираем все результаты выше порога
     results = [
         (float(score), df.iloc[idx]["phrase_full"], df.iloc[idx]["topics"], df.iloc[idx]["comment"])
         for idx, score in enumerate(sims) if float(score) >= threshold
     ]
 
+    # Удаляем дубликаты по phrase_full, оставляя максимальный score
     results = deduplicate_results(results)
+
+    # Сортируем и берём top_k
     results = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
 
     return results
@@ -184,7 +188,7 @@ def keyword_search(query, df):
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
-        return results
+        return results  # ⚠️ ВАЖНО: без повторного deduplication
 
     filtered = []
     for item in results:
@@ -197,4 +201,4 @@ def filter_by_topics(results, selected_topics):
             if any(topic in topics for topic in selected_topics):
                 filtered.append((phrase_full, topics, comment))
 
-    return filtered
+    return filtered  # ⚠️ Без deduplicate_results
