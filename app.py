@@ -16,7 +16,22 @@ df = get_data()
 
 # 🔘 Все уникальные тематики
 all_topics = sorted({topic for topics in df['topics'] for topic in topics})
-selected_topics = st.multiselect("Фильтр по тематикам (независимо от поиска):", all_topics)
+
+# Встроенный текстовый фильтр — с реальным вхождением строки
+topic_query = st.text_input("🔍 Быстрый фильтр по тематикам:", placeholder="например, разб")
+
+# Фильтрация по подстроке
+if topic_query:
+    filtered_topics = [t for t in all_topics if topic_query.lower() in t.lower()]
+else:
+    filtered_topics = all_topics
+
+# Отображение мультиселекта только с отфильтрованными тематиками
+selected_topics = st.multiselect(
+    "Фильтр по тематикам (независимо от поиска):",
+    options=filtered_topics,
+    default=[],
+)
 
 # 📂 Фразы по выбранным тематикам
 if selected_topics:
