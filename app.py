@@ -7,9 +7,6 @@ st.title("🤖 Проверка фраз")
 @st.cache_data
 def get_data():
     df = load_all_excels()
-    from utils import get_model
-    model = get_model()
-    df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
     return df
 
 df = get_data()
