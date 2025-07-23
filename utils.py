@@ -42,7 +42,7 @@ def lemmatize_cached(word):
     return lemmatize(word)
 
 SYNONYM_GROUPS = [
-
+    
 ]
 
 SYNONYM_DICT = {}
@@ -58,30 +58,8 @@ GITHUB_CSV_URLS = [
 ]
 
 def split_by_slash(phrase):
-    phrase = phrase.strip()
-    parts = []
-
-    # Разбивка по |
-    for segment in phrase.split("|"):
-        segment = segment.strip()
-        if "/" in segment:
-            tokens = [p.strip() for p in segment.split("/") if p.strip()]
-            if len(tokens) == 2:
-                pattern = re.compile(r"^(.*?\b)?(\w+)\s*/\s*(\w+)(\b.*?)?$")
-                m = pattern.match(segment)
-                if m:
-                    prefix = (m.group(1) or "").strip()
-                    first = m.group(2).strip()
-                    second = m.group(3).strip()
-                    suffix = (m.group(4) or "").strip()
-                    parts.append(" ".join(filter(None, [prefix, first, suffix])))
-                    parts.append(" ".join(filter(None, [prefix, second, suffix])))
-                    continue
-            parts.extend(tokens)
-        else:
-            parts.append(segment)
-
-    return [p for p in parts if p]
+    parts = [p.strip() for p in str(phrase).split("/") if p.strip()]
+    return parts if parts else [phrase]
 
 def load_excel(url):
     response = requests.get(url)
@@ -102,14 +80,10 @@ def load_excel(url):
     df['phrase_lemmas'] = df['phrase_proc'].apply(
         lambda text: {lemmatize_cached(w) for w in re.findall(r"\w+", text)}
     )
-
-    # Считаем эмбеддинги заранее
-    model = get_model()
-    df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
-
+    
     if 'comment' not in df.columns:
         df['comment'] = ""
-
+        
     return df[['phrase', 'phrase_proc', 'phrase_full', 'phrase_lemmas', 'topics', 'comment']]
 
 def load_all_excels():
@@ -127,6 +101,9 @@ def semantic_search(query, df, top_k=5, threshold=0.5):
     model = get_model()
     query_proc = preprocess(query)
     query_emb = model.encode(query_proc, convert_to_tensor=True)
+
+    if 'phrase_embs' not in df.attrs:
+        df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
 
     phrase_embs = df.attrs['phrase_embs']
     sims = util.pytorch_cos_sim(query_emb, phrase_embs)[0]
