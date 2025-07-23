@@ -50,7 +50,7 @@ for group in SYNONYM_GROUPS:
         SYNONYM_DICT[lemma] = lemmas
 
 GITHUB_CSV_URLS = [
-    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.csv",
+    "https://raw.githubusercontent.com/skatzrskx55q/data-assistant-vfiziki/main/data6.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
@@ -84,7 +84,7 @@ def load_excel(url):
     if resp.status_code != 200:
         raise ValueError(f"Ошибка загрузки {url}")
 
-    df = pd.read_csv(BytesIO(response.content), encoding='utf-8')
+    df = pd.read_excel(BytesIO(resp.content))
     topic_cols = [c for c in df.columns if c.lower().startswith("topics")]
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
