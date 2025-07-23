@@ -5,31 +5,18 @@ st.set_page_config(page_title="Проверка фраз ФЛ", layout="centered
 st.title("🤖 Проверка фраз")
 
 @st.cache_data
-
 def get_data():
     df = load_all_excels()
+    from utils import get_model
+    model = get_model()
+    df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
     return df
 
 df = get_data()
 
 # 🔘 Все уникальные тематики
-all_topics = sorted(set(t for ts in df['topics'].dropna() for t in ts))
-
-# Встроенный текстовый фильтр — с реальным вхождением строки
-topic_query = st.text_input("🔍 Быстрый фильтр по тематикам:", placeholder="например, разб")
-
-# Фильтрация по подстроке
-if topic_query:
-    filtered_topics = [t for t in all_topics if topic_query.lower() in t.lower()]
-else:
-    filtered_topics = all_topics
-
-# Отображение мультиселекта только с отфильтрованными тематиками
-selected_topics = st.multiselect(
-    "Фильтр по тематикам (независимо от поиска):",
-    options=filtered_topics,
-    default=[],
-)
+all_topics = sorted({topic for topics in df['topics'] for topic in topics})
+selected_topics = st.multiselect("Фильтр по тематикам (независимо от поиска):", all_topics)
 
 # 📂 Фразы по выбранным тематикам
 if selected_topics:
@@ -58,11 +45,7 @@ if query:
         results = semantic_search(query, df)
         if results:
             st.markdown("### 🔍 Результаты умного поиска:")
-            shown = set()
             for score, phrase_full, topics, comment in results:
-                if phrase_full in shown:
-                    continue
-                shown.add(phrase_full)
                 with st.container():
                     st.markdown(
                         f"""
@@ -83,11 +66,7 @@ if query:
         exact_results = keyword_search(query, df)
         if exact_results:
             st.markdown("### 🧷 Точный поиск:")
-            shown = set()
             for phrase, topics, comment in exact_results:
-                if phrase in shown:
-                    continue
-                shown.add(phrase)
                 with st.container():
                     st.markdown(
                         f"""
