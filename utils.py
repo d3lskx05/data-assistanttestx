@@ -5,7 +5,6 @@ from io import BytesIO
 from sentence_transformers import SentenceTransformer, util
 import pymorphy2
 import functools
-import torch
 
 # ---------- модель и морфологический разбор ----------
 
@@ -17,7 +16,7 @@ def get_model():
 
     model_path = "fine_tuned_model"
     model_zip  = "fine_tuned_model.zip"
-    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"
+    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # при необходимости замените
 
     if not os.path.exists(model_path):
         gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
@@ -43,6 +42,7 @@ def lemmatize_cached(word):
     return lemmatize(word)
 
 SYNONYM_GROUPS = []
+
 SYNONYM_DICT = {}
 for group in SYNONYM_GROUPS:
     lemmas = {lemmatize(w.lower()) for w in group}
@@ -50,7 +50,7 @@ for group in SYNONYM_GROUPS:
         SYNONYM_DICT[lemma] = lemmas
 
 GITHUB_CSV_URLS = [
-    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.xlsx",
+    "https://raw.githubusercontent.com/skatzrskx55q/data-assistant-vfiziki/main/data6.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
@@ -99,6 +99,9 @@ def load_excel(url):
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
     )
 
+    model = get_model()
+    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
+
     if "comment" not in df.columns:
         df["comment"] = ""
 
@@ -106,45 +109,47 @@ def load_excel(url):
 
 def load_all_excels():
     dfs = []
-    embs_list = []
-    model = get_model()
     for url in GITHUB_CSV_URLS:
         try:
-            df = load_excel(url)
-            embs = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
-            dfs.append(df)
-            embs_list.append(embs)
+            dfs.append(load_excel(url))
         except Exception as e:
             print(f"⚠️ Ошибка с {url}: {e}")
     if not dfs:
         raise ValueError("Не удалось загрузить ни одного файла")
-    df = pd.concat(dfs, ignore_index=True)
-    phrase_embs = torch.cat(embs_list)
-    return df, phrase_embs
+    return pd.concat(dfs, ignore_index=True)
 
 # ---------- удаление дублей ----------
 
 def _score_of(item):
+    """Возвращает числовой score из кортежа результата."""
     return item[0] if len(item) == 4 else 1.0
 
 def _phrase_full_of(item):
+    """Возвращает phrase_full из кортежа результата."""
     return item[1] if len(item) == 4 else item[0]
 
 def deduplicate_results(results):
+    """
+    Удаляет дубликаты по phrase_full, сохраняя кортеж в исходном формате
+    (4‑элемента для semantic, 3‑элемента для keyword) и оставляя
+    наиболее высокий score при коллизии.
+    """
     best = {}
     for item in results:
         key   = _phrase_full_of(item)
         score = _score_of(item)
+
         if key not in best or score > _score_of(best[key]):
             best[key] = item
     return list(best.values())
 
 # ---------- поиск ----------
 
-def semantic_search(query, df, phrase_embs, top_k=5, threshold=0.5):
+def semantic_search(query, df, top_k=5, threshold=0.5):
     model       = get_model()
     query_proc  = preprocess(query)
     query_emb   = model.encode(query_proc, convert_to_tensor=True)
+    phrase_embs = df.attrs["phrase_embs"]
 
     sims = util.pytorch_cos_sim(query_emb, phrase_embs)[0]
     results = [
