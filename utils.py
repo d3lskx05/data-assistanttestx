@@ -84,7 +84,7 @@ def load_excel(url):
     if resp.status_code != 200:
         raise ValueError(f"Ошибка загрузки {url}")
 
-    df = pd.read_excel(BytesIO(resp.content))
+    df = pd.read_csv(BytesIO(response.content), encoding='utf-8')
     topic_cols = [c for c in df.columns if c.lower().startswith("topics")]
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
