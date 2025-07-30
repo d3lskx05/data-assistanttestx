@@ -5,15 +5,14 @@ from io import BytesIO
 from sentence_transformers import SentenceTransformer, util
 import pymorphy2
 import functools
+import os
+import zipfile
+import gdown
 
 # ---------- модель и морфологический разбор ----------
 
 @functools.lru_cache(maxsize=1)
 def get_model():
-    import os
-    import zipfile
-    import gdown
-
     model_path = "fine_tuned_model"
     model_zip = "fine_tuned_model.zip"
     file_id = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # при необходимости замените
@@ -24,6 +23,7 @@ def get_model():
             zf.extractall(model_path)
 
     return SentenceTransformer(model_path)
+
 
 @functools.lru_cache(maxsize=1)
 def get_morph():
@@ -41,26 +41,16 @@ def lemmatize(word):
 def lemmatize_cached(word):
     return lemmatize(word)
 
-# ---------- Синонимы ----------
-SYNONYM_GROUPS = []  # ← можно заполнять в формате [["разблокировка", "разблокировать"], ["интернет", "сеть интернет"]]
+# ---------- синонимы ----------
+SYNONYM_GROUPS = []
+SYNONYM_DICT = {}
+for group in SYNONYM_GROUPS:
+    lemmas = {lemmatize(w.lower()) for w in group}
+    for lemma in lemmas:
+        SYNONYM_DICT[lemma] = lemmas
 
-def build_synonym_dict(synonym_groups):
-    synonym_dict = {}
-    for group in synonym_groups:
-        lemmas = set()
-        for phrase in group:
-            tokens = [lemmatize_cached(w) for w in re.findall(r"\w+", phrase.lower())]
-            lemmas.add(" ".join(tokens))
-
-        for lemma in lemmas:
-            synonym_dict[lemma] = lemmas
-    return synonym_dict
-
-SYNONYM_DICT = build_synonym_dict(SYNONYM_GROUPS)
-
-# ---------- загрузка данных ----------
-
-GITHUB_FILE_URLS = [
+# ---------- источники данных ----------
+GITHUB_URLS = [
     "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
@@ -88,17 +78,17 @@ def split_by_slash(phrase: str):
             parts.append(segment)
     return [p for p in parts if p]
 
+# ---------- загрузка данных ----------
+
 def load_file(url):
     resp = requests.get(url)
     if resp.status_code != 200:
         raise ValueError(f"Ошибка загрузки {url}")
 
-    if url.endswith(".xlsx"):
-        df = pd.read_excel(BytesIO(resp.content))
-    elif url.endswith(".csv"):
+    if url.endswith(".csv"):
         df = pd.read_csv(BytesIO(resp.content))
     else:
-        raise ValueError("Неподдерживаемый формат файла")
+        df = pd.read_excel(BytesIO(resp.content))
 
     topic_cols = [c for c in df.columns if c.lower().startswith("topics")]
     if not topic_cols:
@@ -124,7 +114,7 @@ def load_file(url):
 
 def load_all_files():
     dfs = []
-    for url in GITHUB_FILE_URLS:
+    for url in GITHUB_URLS:
         try:
             dfs.append(load_file(url))
         except Exception as e:
@@ -168,43 +158,19 @@ def semantic_search(query, df, top_k=5, threshold=0.5):
 
 def keyword_search(query, df):
     query_proc = preprocess(query)
-    query_words = re.findall(r"\w+", query_proc)
-    query_lemmas = [lemmatize_cached(w) for w in query_words]
-    query_phrase = " ".join(query_lemmas)
-
     matched = []
     for row in df.itertuples():
-        phrase_lemmas_str = " ".join(row.phrase_lemmas)
-
-        # Проверка на совпадение многословных синонимов
-        if query_phrase in SYNONYM_DICT.get(query_phrase, {query_phrase}) and query_phrase in phrase_lemmas_str:
+        if query_proc in row.phrase_proc:  # простой поиск подстроки
             matched.append((row.phrase_full, row.topics, row.comment))
-            continue
-
-        # Проверка на совпадение по отдельным словам
-        lemma_match = all(
-            any(ql in SYNONYM_DICT.get(pl, {pl}) for pl in row.phrase_lemmas)
-            for ql in query_lemmas
-        )
-        if lemma_match:
-            matched.append((row.phrase_full, row.topics, row.comment))
-
     return deduplicate_results(matched)
 
 # ---------- фильтрация ----------
 
-def filter_by_topics(results, selected_topics):
+def filter_by_topics_only(df, selected_topics):
     if not selected_topics:
-        return results
-
+        return []
     filtered = []
-    for item in results:
-        if isinstance(item, tuple) and len(item) == 4:
-            score, phrase, topics, comment = item
-            if set(topics) & set(selected_topics):
-                filtered.append((score, phrase, topics, comment))
-        elif isinstance(item, tuple) and len(item) == 3:
-            phrase, topics, comment = item
-            if set(topics) & set(selected_topics):
-                filtered.append((phrase, topics, comment))
-    return filtered
+    for row in df.itertuples():
+        if set(row.topics) & set(selected_topics):
+            filtered.append((row.phrase_full, row.topics, row.comment))
+    return deduplicate_results(filtered)
