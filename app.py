@@ -1,41 +1,38 @@
 import streamlit as st
-from utils import load_all_files, semantic_search, keyword_search, filter_by_topics_only
+from utils import load_all_excels, semantic_search, keyword_search, filter_by_topics
 
 st.set_page_config(page_title="Проверка фраз ФЛ", layout="centered")
 st.title("🤖 Проверка фраз")
 
 @st.cache_data
 def get_data():
-    df = load_all_files()
-    from utils import get_model
-    model = get_model()
-    df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
+    df = load_all_excels()
     return df
 
 df = get_data()
 
-# 🔘 Все уникальные тематики
+# 🔘 Фильтр по тематикам
 all_topics = sorted({topic for topics in df['topics'] for topic in topics})
-selected_topics = st.multiselect("Фильтр по тематикам:", all_topics)
+selected_topics = st.multiselect("Фильтр по тематикам (независимо от поиска):", all_topics)
 
-# 📂 Фразы по выбранным тематикам
+filtered_df = filter_by_topics(df, selected_topics)
+
 if selected_topics:
     st.markdown("### 📂 Фразы по выбранным тематикам:")
-    filtered_results = filter_by_topics_only(df, selected_topics)
-    for phrase, topics, comment in filtered_results:
+    for row in filtered_df.itertuples():
         with st.container():
             st.markdown(
                 f"""
                 <div style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin-bottom: 12px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
-                    <div style="font-size: 18px; font-weight: 600; color: #333;">📝 {phrase}</div>
-                    <div style="margin-top: 4px; font-size: 14px; color: #666;">🔖 Тематики: <strong>{', '.join(topics)}</strong></div>
+                    <div style="font-size: 18px; font-weight: 600; color: #333;">📝 {row.phrase_full}</div>
+                    <div style="margin-top: 4px; font-size: 14px; color: #666;">🔖 Тематики: <strong>{', '.join(row.topics)}</strong></div>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
-            if comment and str(comment).strip().lower() != "nan":
+            if row.comment and str(row.comment).strip().lower() != "nan":
                 with st.expander("💬 Комментарий", expanded=False):
-                    st.markdown(comment)
+                    st.markdown(row.comment)
 
 # 📥 Поисковый запрос
 query = st.text_input("Введите ваш запрос:")
