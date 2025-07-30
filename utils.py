@@ -24,7 +24,6 @@ def get_model():
 
     return SentenceTransformer(model_path)
 
-
 @functools.lru_cache(maxsize=1)
 def get_morph():
     return pymorphy2.MorphAnalyzer()
@@ -41,24 +40,42 @@ def lemmatize(word):
 def lemmatize_cached(word):
     return lemmatize(word)
 
-# ---------- синонимы ----------
-SYNONYM_GROUPS = []
+# ---------- загрузка синонимов ----------
+def load_synonyms(file_path="synonyms.csv"):
+    df = pd.read_csv(file_path)
+    synonym_groups = []
+    for row in df["group"]:
+        words = [w.strip() for w in str(row).split(",") if w.strip()]
+        synonym_groups.append(set(words))
+    return synonym_groups
+
+SYNONYM_GROUPS = load_synonyms()
+
 SYNONYM_DICT = {}
 for group in SYNONYM_GROUPS:
     lemmas = {lemmatize(w.lower()) for w in group}
     for lemma in lemmas:
         SYNONYM_DICT[lemma] = lemmas
 
-# ---------- источники данных ----------
-GITHUB_URLS = [
-    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.xlsx",
+def expand_query_with_synonyms(query: str):
+    query_lemmas = {lemmatize_cached(w) for w in re.findall(r"\w+", query.lower())}
+    expanded = set([query.lower()])
+    for lemma in query_lemmas:
+        if lemma in SYNONYM_DICT:
+            expanded |= SYNONYM_DICT[lemma]
+    return expanded
+
+# ---------- загрузка данных ----------
+
+GITHUB_CSV_URLS = [
+    "https://raw.githubusercontent.com/skatzrskx55q/data-assistant-vfiziki/main/data6.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
 
 def split_by_slash(phrase: str):
     phrase = phrase.strip()
-    parts = []
+    parts  = []
     for segment in phrase.split("|"):
         segment = segment.strip()
         if "/" in segment:
@@ -67,7 +84,7 @@ def split_by_slash(phrase: str):
                 m = re.match(r"^(.*?\b)?(\w+)\s*/\s*(\w+)(\b.*?)?$", segment)
                 if m:
                     prefix = (m.group(1) or "").strip()
-                    first = m.group(2).strip()
+                    first  = m.group(2).strip()
                     second = m.group(3).strip()
                     suffix = (m.group(4) or "").strip()
                     parts.append(" ".join(filter(None, [prefix, first, suffix])))
@@ -78,14 +95,13 @@ def split_by_slash(phrase: str):
             parts.append(segment)
     return [p for p in parts if p]
 
-# ---------- загрузка данных ----------
-
-def load_file(url):
+def load_excel_or_csv(url):
     resp = requests.get(url)
     if resp.status_code != 200:
         raise ValueError(f"Ошибка загрузки {url}")
 
-    if url.endswith(".csv"):
+    content_type = resp.headers.get("Content-Type", "")
+    if "csv" in url or "text/csv" in content_type:
         df = pd.read_csv(BytesIO(resp.content))
     else:
         df = pd.read_excel(BytesIO(resp.content))
@@ -112,11 +128,11 @@ def load_file(url):
 
     return df[["phrase", "phrase_proc", "phrase_full", "phrase_lemmas", "topics", "comment"]]
 
-def load_all_files():
+def load_all_excels():
     dfs = []
-    for url in GITHUB_URLS:
+    for url in GITHUB_CSV_URLS:
         try:
-            dfs.append(load_file(url))
+            dfs.append(load_excel_or_csv(url))
         except Exception as e:
             print(f"⚠️ Ошибка с {url}: {e}")
     if not dfs:
@@ -124,7 +140,6 @@ def load_all_files():
     return pd.concat(dfs, ignore_index=True)
 
 # ---------- удаление дублей ----------
-
 def _score_of(item):
     return item[0] if len(item) == 4 else 1.0
 
@@ -134,14 +149,13 @@ def _phrase_full_of(item):
 def deduplicate_results(results):
     best = {}
     for item in results:
-        key = _phrase_full_of(item)
+        key   = _phrase_full_of(item)
         score = _score_of(item)
         if key not in best or score > _score_of(best[key]):
             best[key] = item
     return list(best.values())
 
 # ---------- поиск ----------
-
 def semantic_search(query, df, top_k=5, threshold=0.5):
     model = get_model()
     query_proc = preprocess(query)
@@ -157,20 +171,18 @@ def semantic_search(query, df, top_k=5, threshold=0.5):
     return deduplicate_results(results)
 
 def keyword_search(query, df):
-    query_proc = preprocess(query)
+    query_variants = expand_query_with_synonyms(query)
     matched = []
+
     for row in df.itertuples():
-        if query_proc in row.phrase_proc:  # простой поиск подстроки
-            matched.append((row.phrase_full, row.topics, row.comment))
+        for variant in query_variants:
+            if variant in row.phrase_proc:
+                matched.append((row.phrase_full, row.topics, row.comment))
+                break
     return deduplicate_results(matched)
 
 # ---------- фильтрация ----------
-
-def filter_by_topics_only(df, selected_topics):
+def filter_by_topics(df, selected_topics):
     if not selected_topics:
-        return []
-    filtered = []
-    for row in df.itertuples():
-        if set(row.topics) & set(selected_topics):
-            filtered.append((row.phrase_full, row.topics, row.comment))
-    return deduplicate_results(filtered)
+        return df
+    return df[df["topics"].apply(lambda topics: any(t for t in topics if any(st.lower() in t.lower() for st in selected_topics)))]
