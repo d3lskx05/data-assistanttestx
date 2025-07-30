@@ -50,7 +50,7 @@ for group in SYNONYM_GROUPS:
         SYNONYM_DICT[lemma] = lemmas
 
 GITHUB_CSV_URLS = [
-    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.csv",
+    "https://raw.githubusercontent.com/skatzrskx55q/data-assistant-vfiziki/main/data6.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
@@ -84,28 +84,16 @@ def load_excel(url):
     if resp.status_code != 200:
         raise ValueError(f"Ошибка загрузки {url}")
 
-    file_bytes = BytesIO(resp.content)
-
-    # Выбор метода чтения по расширению файла
-    if url.lower().endswith(".csv"):
-        df = pd.read_csv(file_bytes, sep=',', encoding='utf-8')
-    elif url.lower().endswith((".xlsx", ".xls")):
-        df = pd.read_excel(file_bytes)
-    else:
-        raise ValueError("Неподдерживаемый формат файла: " + url)
-
+    df = pd.read_excel(BytesIO(resp.content))
     topic_cols = [c for c in df.columns if c.lower().startswith("topics")]
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
 
-    df["topics"] = df[topic_cols].astype(str).agg(
-        lambda x: [v for v in x if v and v.strip().lower() != "nan"], axis=1
-    )
-
+    df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
     df["phrase_full"] = df["phrase"]
     df["phrase_list"] = df["phrase"].apply(split_by_slash)
-    df = df.explode("phrase_list", ignore_index=True)
-    df["phrase"] = df["phrase_list"]
+    df                = df.explode("phrase_list", ignore_index=True)
+    df["phrase"]      = df["phrase_list"]
     df["phrase_proc"] = df["phrase"].apply(preprocess)
     df["phrase_lemmas"] = df["phrase_proc"].apply(
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
