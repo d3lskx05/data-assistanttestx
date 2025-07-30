@@ -1,51 +1,82 @@
+# app.py
+
 import streamlit as st
-from utils import load_all_files, semantic_search, keyword_search, filter_by_topics
+import numpy as np
+from utils import load_model, load_data, build_faiss_index, keyword_search, semantic_search
 
-# ----------- Загрузка данных -----------
-@st.cache_resource
-def load_data():
-    return load_all_files()
+# Настройка заголовка приложения
+st.title("Поиск по базе фраз")
 
-df = load_data()
-
-# ----------- Интерфейс приложения -----------
-st.set_page_config(page_title="Semantic Assistant", layout="wide")
-st.title("🔍 Semantic Assistant")
-
-# Блок фильтров
-all_topics = sorted({topic for topics in df["topics"] for topic in topics})
-selected_topics = st.multiselect("Фильтр по тематикам", all_topics)
-
-# Выбор режима поиска
-search_mode = st.radio("Выберите режим поиска:", ["Точный поиск", "Умный поиск"], horizontal=True)
-
-# Поле поиска
-query = st.text_input("Введите поисковый запрос")
-
-# Количество результатов
-top_k = st.slider("Количество результатов (для умного поиска)", min_value=1, max_value=50, value=10)
-
-if st.button("Найти"):
-    if not query.strip():
-        st.warning("Введите поисковый запрос")
+# 1. Загрузка модели и данных (с помощью кэширования для скорости)
+@st.cache(allow_output_mutation=True)
+def prepare_data(model, urls):
+    df = load_data(urls)
+    # Извлекаем матрицу эмбеддингов из столбца 'embeddings'
+    if 'embeddings' in df.columns and len(df) > 0:
+        embeddings = np.vstack(df['embeddings'].values)
+        index = build_faiss_index(embeddings)
     else:
-        if search_mode == "Точный поиск":
-            results = keyword_search(query, df)
-        else:
-            results = semantic_search(query, df, top_k=top_k)
+        embeddings = np.array([])
+        index = None
+    return df, embeddings, index
 
-        # Фильтрация по тематикам
-        results = filter_by_topics(results, selected_topics)
+model = load_model()
+# Список URL на GitHub (CSV/XLSX) – пример
+urls = [
+    "https://raw.githubusercontent.com/youruser/yourrepo/main/data1.csv",
+    "https://raw.githubusercontent.com/youruser/yourrepo/main/data2.xlsx"
+]
+df, embeddings, index = prepare_data(model, urls)
 
-        if not results:
-            st.info("Ничего не найдено.")
-        else:
-            for item in results:
-                if len(item) == 4:  # Умный поиск
-                    score, phrase, topics, comment = item
-                    st.markdown(f"**Фраза:** {phrase}  \n**Схожесть:** {score:.4f}  \n**Тематики:** {', '.join(topics)}  \n**Комментарий:** {comment}")
-                else:  # Точный поиск
-                    phrase, topics, comment = item
-                    st.markdown(f"**Фраза:** {phrase}  \n**Тематики:** {', '.join(topics)}  \n**Комментарий:** {comment}")
+# 2. Фильтр по темам
+all_topics = sorted(df['topics'].unique())
+selected_topics = st.multiselect(
+    "Темы (для поиска можно начать ввод темы и выбрать вариант)", 
+    options=all_topics
+)
+# Фильтрация DataFrame по выбранным темам
+if selected_topics:
+    df_filtered = df[df['topics'].isin(selected_topics)]
+else:
+    df_filtered = df.copy()
 
-            st.success(f"Найдено {len(results)} результатов")
+st.write(f"Найдено фраз: {len(df_filtered)} по выбранным темам")
+
+# 3. Поле ввода запроса и параметров поиска
+query = st.text_input("Введите запрос для поиска:")
+threshold = st.slider("Порог схожести (threshold)", 0.0, 1.0, 0.5, 0.01)
+top_k = st.number_input("Top K результатов", min_value=1, max_value=100, value=5, step=1)
+
+# 4. Если запрос не пустой, выполняем поиск
+if query:
+    # Список индексов, ограниченный выбранными темами
+    if selected_topics:
+        # Чтобы поисковый индекс учитывал фильтрацию, можно построить новый индекс на df_filtered.embeddings
+        emb_filtered = np.vstack(df_filtered['embeddings'].values) if len(df_filtered) > 0 else np.array([])
+        index_filtered = build_faiss_index(emb_filtered) if len(emb_filtered) > 0 else None
+        # Semantic Search
+        sem_results = semantic_search(query, df_filtered, index_filtered, embeddings, model, threshold, top_k)
+        # Keyword Search
+        key_results = keyword_search(query, df_filtered)
+    else:
+        sem_results = semantic_search(query, df_filtered, index, embeddings, model, threshold, top_k)
+        key_results = keyword_search(query, df_filtered)
+    
+    # 5. Вывод результатов
+    st.subheader("Результаты семантического поиска")
+    if not sem_results.empty:
+        for _, row in sem_results.iterrows():
+            st.markdown(f"**Фраза:** {row['phrase_full']}")
+            st.markdown(f"*Комментарий:* {row['comment']}")
+            st.write("")  # пустая строка между карточками
+    else:
+        st.write("По вашему запросу в семантическом поиске ничего не найдено.")
+    
+    st.subheader("Результаты точного поиска (по словам)")
+    if not key_results.empty:
+        for _, row in key_results.iterrows():
+            st.markdown(f"**Фраза:** {row['phrase_full']}")
+            st.markdown(f"*Комментарий:* {row['comment']}")
+            st.write("")
+    else:
+        st.write("По вашему запросу в точном поиске ничего не найдено.")
