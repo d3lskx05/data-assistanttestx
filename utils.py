@@ -68,7 +68,7 @@ def expand_query_with_synonyms(query: str):
 # ---------- загрузка данных ----------
 
 GITHUB_CSV_URLS = [
-    "https://raw.githubusercontent.com/skatzrskx55q/data-assistant-vfiziki/main/data6.xlsx",
+    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
