@@ -10,6 +10,7 @@ import streamlit as st
 import zipfile
 import os
 import gdown
+import functools
 
 # ---------- модель и морфоанализ ----------
 
