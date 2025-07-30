@@ -1,24 +1,26 @@
+# app.py
+
 import streamlit as st
-from utils import load_all_excels, semantic_search, keyword_search, filter_by_topics
+from utils import load_all_tables, semantic_search, keyword_search
 
 st.set_page_config(page_title="Проверка фраз ФЛ", layout="centered")
 st.title("🤖 Проверка фраз")
 
 @st.cache_data
 def get_data():
-    df = load_all_excels()
+    df = load_all_tables()
     return df
 
 df = get_data()
 
-# 🔘 Фильтр по тематикам
+# 🔘 Все уникальные тематики
 all_topics = sorted({topic for topics in df['topics'] for topic in topics})
 selected_topics = st.multiselect("Фильтр по тематикам (независимо от поиска):", all_topics)
 
-filtered_df = filter_by_topics(df, selected_topics)
-
+# 📂 Фразы по выбранным тематикам
 if selected_topics:
     st.markdown("### 📂 Фразы по выбранным тематикам:")
+    filtered_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
     for row in filtered_df.itertuples():
         with st.container():
             st.markdown(
