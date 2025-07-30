@@ -23,7 +23,7 @@ def prepare_data(model, urls):
 model = load_model()
 # Список URL на GitHub (CSV/XLSX) – пример
 urls = [
-    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/data6.xlsx",
+    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.xlsx",
     "https://raw.githubusercontent.com/youruser/yourrepo/main/data2.xlsx"
 ]
 df, embeddings, index = prepare_data(model, urls)
