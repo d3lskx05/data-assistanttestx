@@ -51,4 +51,49 @@ if query:
                 with st.container():
                     st.markdown(
                         f"""
-                        <div style="border: 1px solid #e0e0e0
+                        <div style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin-bottom: 12px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                            <div style="font-size: 18px; font-weight: 600; color: #333;">🧠 {phrase_full}</div>
+                            <div style="margin-top: 4px; font-size: 14px; color: #666;">🔖 Тематики: <strong>{', '.join(topics)}</strong></div>
+                            <div style="margin-top: 2px; font-size: 13px; color: #999;">🎯 Релевантность: {score:.2f}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    if comment and str(comment).strip().lower() != "nan":
+                        with st.expander("💬 Комментарий", expanded=False):
+                            st.markdown(comment)
+        else:
+            st.warning("Совпадений не найдено в умном поиске.")
+
+        exact_results = keyword_search(query, df)
+        if exact_results:
+            st.markdown("### 🧷 Точный поиск:")
+            for phrase, topics, comment in exact_results:
+                with st.container():
+                    st.markdown(
+                        f"""
+                        <div style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin-bottom: 12px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                            <div style="font-size: 18px; font-weight: 600; color: #333;">📌 {phrase}</div>
+                            <div style="margin-top: 4px; font-size: 14px; color: #666;">🔖 Тематики: <strong>{', '.join(topics)}</strong></div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    if comment and str(comment).strip().lower() != "nan":
+                        with st.expander("💬 Комментарий", expanded=False):
+                            st.markdown(comment)
+        else:
+            st.info("Ничего не найдено в точном поиске.")
+
+    except Exception as e:
+        st.error(f"Ошибка при обработке запроса: {e}")
+
+# 📥 Кнопка скачивания логов
+LOG_FILE = os.path.join(os.getenv("TMP", "/tmp"), "query_log.txt")
+
+if os.path.exists(LOG_FILE):
+    with open(LOG_FILE, "r", encoding="utf-8") as f:
+        log_content = f.read()
+    st.download_button("📥 Скачать лог запросов", data=log_content, file_name="query_log.txt")
+else:
+    st.warning("Файл логов не найден.")
