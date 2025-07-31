@@ -1,3 +1,4 @@
+# utils.py
 import pandas as pd
 import requests
 import re
@@ -5,20 +6,19 @@ from io import BytesIO
 from sentence_transformers import SentenceTransformer, util
 import pymorphy2
 import functools
+import os
 
 # ---------- модель и морфологический разбор ----------
 
 @functools.lru_cache(maxsize=1)
 def get_model():
-    import os
-    import zipfile
-    import gdown
-
     model_path = "fine_tuned_model"
     model_zip  = "fine_tuned_model.zip"
     file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # при необходимости замените
 
     if not os.path.exists(model_path):
+        import gdown
+        import zipfile
         gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
         with zipfile.ZipFile(model_zip, 'r') as zf:
             zf.extractall(model_path)
@@ -77,8 +77,6 @@ def split_by_slash(phrase: str):
             parts.append(segment)
     return [p for p in parts if p]
 
-# ---------- загрузка данных ----------
-
 def load_excel(url):
     resp = requests.get(url)
     if resp.status_code != 200:
@@ -99,8 +97,7 @@ def load_excel(url):
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
     )
 
-    model = get_model()
-    df.attrs["phrase_embs"] = model.encode(df["phrase_proc"].tolist(), convert_to_tensor=True)
+    # Можно сохранить датафрейм с вычисленными эмбеддингами на диск (pickle/NumPy) для повторного использования:contentReference[oaicite:6]{index=6}:contentReference[oaicite:7]{index=7}.
 
     if "comment" not in df.columns:
         df["comment"] = ""
@@ -131,7 +128,7 @@ def _phrase_full_of(item):
 def deduplicate_results(results):
     """
     Удаляет дубликаты по phrase_full, сохраняя кортеж в исходном формате
-    (4‑элемента для semantic, 3‑элемента для keyword) и оставляя
+    (4-элемента для semantic, 3-элемента для keyword) и оставляя
     наиболее высокий score при коллизии.
     """
     best = {}
@@ -176,7 +173,7 @@ def keyword_search(query, df):
 
     return deduplicate_results(matched)
 
-# ---------- фильтрация ----------
+# ---------- фильтрация (если понадобится) ----------
 
 def filter_by_topics(results, selected_topics):
     if not selected_topics:
