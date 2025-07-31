@@ -1,14 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from utils import (
-    load_all_excels,
-    semantic_search,
-    keyword_search,
-    get_model,
-    log_query,
-    LOG_PATH
-)
+from utils import load_all_excels, semantic_search, keyword_search, get_model
 
 st.set_page_config(page_title="Проверка фраз ФЛ", layout="centered")
 st.title("🤖 Проверка фраз")
