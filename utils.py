@@ -77,38 +77,41 @@ def split_by_slash(phrase: str):
             parts.append(segment)
     return [p for p in parts if p]
 
-def load_excel(url):
+def load_excel_or_csv(url):
     resp = requests.get(url)
     if resp.status_code != 200:
         raise ValueError(f"Ошибка загрузки {url}")
 
-    df = pd.read_excel(BytesIO(resp.content))
+    if url.endswith(".csv"):
+        df = pd.read_csv(BytesIO(resp.content))
+    else:
+        df = pd.read_excel(BytesIO(resp.content))
+
     topic_cols = [c for c in df.columns if c.lower().startswith("topics")]
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
 
-    df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
+    df["topics"] = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
     df["phrase_full"] = df["phrase"]
     df["phrase_list"] = df["phrase"].apply(split_by_slash)
-    df                = df.explode("phrase_list", ignore_index=True)
-    df["phrase"]      = df["phrase_list"]
+    df = df.explode("phrase_list", ignore_index=True)
+    df["phrase"] = df["phrase_list"]
     df["phrase_proc"] = df["phrase"].apply(preprocess)
     df["phrase_lemmas"] = df["phrase_proc"].apply(
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
     )
-
-    # Можно сохранить датафрейм с вычисленными эмбеддингами на диск (pickle/NumPy) для повторного использования:contentReference[oaicite:6]{index=6}:contentReference[oaicite:7]{index=7}.
 
     if "comment" not in df.columns:
         df["comment"] = ""
 
     return df[["phrase", "phrase_proc", "phrase_full", "phrase_lemmas", "topics", "comment"]]
 
+
 def load_all_excels():
     dfs = []
     for url in GITHUB_CSV_URLS:
         try:
-            dfs.append(load_excel(url))
+            dfs.append(load_excel_or_csv(url))
         except Exception as e:
             print(f"⚠️ Ошибка с {url}: {e}")
     if not dfs:
