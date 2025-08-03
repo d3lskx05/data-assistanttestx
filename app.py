@@ -1,6 +1,5 @@
+# app.py
 import streamlit as st
-import pandas as pd
-import os
 from utils import load_all_excels, semantic_search, keyword_search, get_model
 
 st.set_page_config(page_title="Проверка фраз ФЛ", layout="centered")
@@ -15,9 +14,11 @@ def get_data():
 
 df = get_data()
 
+# 🔘 Все уникальные тематики
 all_topics = sorted({topic for topics in df['topics'] for topic in topics})
 selected_topics = st.multiselect("Фильтр по тематикам (независимо от поиска):", all_topics)
 
+# 📂 Фразы по выбранным тематикам
 if selected_topics:
     st.markdown("### 📂 Фразы по выбранным тематикам:")
     filtered_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
@@ -34,15 +35,12 @@ if selected_topics:
                 with st.expander("💬 Комментарий", expanded=False):
                     st.markdown(row.comment)
 
+# 📥 Поисковый запрос
 query = st.text_input("Введите ваш запрос:")
 
 if query:
     try:
         results = semantic_search(query, df)
-        exact_results = keyword_search(query, df)
-
-        log_query(query, len(results), len(exact_results))
-
         if results:
             st.markdown("### 🔍 Результаты умного поиска:")
             for score, phrase_full, topics, comment in results:
@@ -61,6 +59,7 @@ if query:
         else:
             st.warning("Совпадений не найдено в умном поиске.")
 
+        exact_results = keyword_search(query, df)
         if exact_results:
             st.markdown("### 🧷 Точный поиск:")
             for phrase, topics, comment in exact_results:
@@ -77,22 +76,6 @@ if query:
                             st.markdown(comment)
         else:
             st.info("Ничего не найдено в точном поиске.")
+
     except Exception as e:
         st.error(f"Ошибка при обработке запроса: {e}")
-
-# 👤 Админ-зона логов (малозаметные кнопки)
-with st.expander("ℹ️", expanded=False):
-    st.markdown(
-        "<div style='font-size: 12px; color: gray;'>Скрытые функции</div>",
-        unsafe_allow_html=True
-    )
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if os.path.exists(LOG_PATH):
-            with open(LOG_PATH, "rb") as f:
-                st.download_button("📥 Скачать лог", f, file_name="query_log.csv", mime="text/csv")
-    with col2:
-        if st.button("🗑 Очистить лог"):
-            if os.path.exists(LOG_PATH):
-                os.remove(LOG_PATH)
-            st.success("Лог очищен.")
