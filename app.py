@@ -1,9 +1,14 @@
-# app.py
 import streamlit as st
 from utils import load_all_excels, semantic_search, keyword_search, get_model
+import datetime
+import pandas as pd
 
 st.set_page_config(page_title="Проверка фраз ФЛ", layout="centered")
 st.title("🤖 Проверка фраз")
+
+# Инициализация логов
+if "logs" not in st.session_state:
+    st.session_state.logs = []
 
 @st.cache_data
 def get_data():
@@ -41,6 +46,17 @@ query = st.text_input("Введите ваш запрос:")
 if query:
     try:
         results = semantic_search(query, df)
+        exact_results = keyword_search(query, df)
+
+        # Логируем запрос
+        st.session_state.logs.append({
+            "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "query": query,
+            "semantic_results": len(results),
+            "keyword_results": len(exact_results),
+            "status": "найдено" if results or exact_results else "не найдено"
+        })
+
         if results:
             st.markdown("### 🔍 Результаты умного поиска:")
             for score, phrase_full, topics, comment in results:
@@ -59,7 +75,6 @@ if query:
         else:
             st.warning("Совпадений не найдено в умном поиске.")
 
-        exact_results = keyword_search(query, df)
         if exact_results:
             st.markdown("### 🧷 Точный поиск:")
             for phrase, topics, comment in exact_results:
@@ -79,3 +94,17 @@ if query:
 
     except Exception as e:
         st.error(f"Ошибка при обработке запроса: {e}")
+
+# Блок логов для админов
+with st.expander("⚙️ Логи (для админов)", expanded=False):
+    if st.button("⬇️ Скачать логи"):
+        if st.session_state.logs:
+            df_logs = pd.DataFrame(st.session_state.logs)
+            csv_data = df_logs.to_csv(index=False).encode("utf-8")
+            st.download_button("Скачать как CSV", csv_data, file_name="logs.csv", mime="text/csv")
+        else:
+            st.info("Логи пусты")
+
+    if st.button("🗑 Очистить логи"):
+        st.session_state.logs.clear()
+        st.success("Логи очищены!")
