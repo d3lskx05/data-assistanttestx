@@ -1,3 +1,4 @@
+# utils.py
 import pandas as pd
 import requests
 import re
@@ -49,7 +50,7 @@ for group in SYNONYM_GROUPS:
         SYNONYM_DICT[lemma] = lemmas
 
 GITHUB_CSV_URLS = [
-    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.xlsx",
+    "https://raw.githubusercontent.com/skatzrskx55q/data-assistant-vfiziki/main/data6.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
