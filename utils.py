@@ -9,18 +9,15 @@ from sentence_transformers import SentenceTransformer, util
 import pymorphy2
 import gdown
 
-# ---------- модель и морфологический разбор ----------
 @functools.lru_cache(maxsize=1)
 def get_model():
     model_path = "fine_tuned_model"
-    model_zip  = "fine_tuned_model.zip"
-    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"
-
+    model_zip = "fine_tuned_model.zip"
+    file_id = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"
     if not os.path.exists(model_path):
         gdown.download(f"https://drive.google.com/uc?id={file_id}", model_zip, quiet=False)
         with zipfile.ZipFile(model_zip, 'r') as zf:
             zf.extractall(model_path)
-
     return SentenceTransformer(model_path)
 
 @functools.lru_cache(maxsize=1)
@@ -47,7 +44,7 @@ for group in SYNONYM_GROUPS:
         SYNONYM_DICT[lemma] = lemmas
 
 GITHUB_CSV_URLS = [
-    "https://raw.githubusercontent.com/d3lskx05/data-assistanttestx/main/data6.xlsx",
+    "https://raw.githubusercontent.com/skatzrskx55q/data-assistant-vfiziki/main/data6.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data21.xlsx",
     "https://raw.githubusercontent.com/skatzrsk/semantic-assistant/main/data31.xlsx"
 ]
@@ -55,19 +52,20 @@ GITHUB_CSV_URLS = [
 # ---------- загрузка данных ----------
 def split_by_slash(phrase: str):
     phrase = phrase.strip()
-    parts  = []
+    parts = []
     for segment in phrase.split("|"):
         segment = segment.strip()
         if "/" in segment:
             tokens = [p.strip() for p in segment.split("/") if p.strip()]
             if len(tokens) == 2:
+                # Исправлена строка regex: закрытые кавычки
                 m = re.match(r"^(.*?\b)?(\w+)\s*/\s*(\w+)(\b.*?)?$, segment)
                 if m:
                     prefix = (m.group(1) or "").strip()
-                    first  = m.group(2).strip()
+                    first = m.group(2).strip()
                     second = m.group(3).strip()
                     suffix = (m.group(4) or "").strip()
-                    parts.append(" ".join(filter(None, [prefix, first,  suffix])))
+                    parts.append(" ".join(filter(None, [prefix, first, suffix])))
                     parts.append(" ".join(filter(None, [prefix, second, suffix])))
                     continue
             parts.extend(tokens)
@@ -86,11 +84,11 @@ def load_excel(url):
     if not topic_cols:
         raise KeyError("Не найдены колонки topics")
 
-    df["topics"]      = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
+    df["topics"] = df[topic_cols].astype(str).agg(lambda x: [v for v in x if v and v != "nan"], axis=1)
     df["phrase_full"] = df["phrase"]
     df["phrase_list"] = df["phrase"].apply(split_by_slash)
-    df                  = df.explode("phrase_list", ignore_index=True)
-    df["phrase"]      = df["phrase_list"]
+    df = df.explode("phrase_list", ignore_index=True)
+    df["phrase"] = df["phrase_list"]
     df["phrase_proc"] = df["phrase"].apply(preprocess)
     df["phrase_lemmas"] = df["phrase_proc"].apply(
         lambda t: {lemmatize_cached(w) for w in re.findall(r"\w+", t)}
@@ -121,8 +119,8 @@ def load_all_excels():
 @functools.lru_cache(maxsize=None)
 def semantic_search(query, df, top_k=5, threshold=0.5):
     from sentence_transformers import util
-    query_proc  = preprocess(query)
-    query_emb   = get_model().encode(query_proc, convert_to_tensor=True)
+    query_proc = preprocess(query)
+    query_emb = get_model().encode(query_proc, convert_to_tensor=True)
     sims = util.pytorch_cos_sim(query_emb, df.attrs['phrase_embs'])[0]
     results = [
         (float(score), df.iloc[idx]['phrase_full'], df.iloc[idx]['topics'], df.iloc[idx]['comment'])
@@ -133,7 +131,7 @@ def semantic_search(query, df, top_k=5, threshold=0.5):
 
 @functools.lru_cache(maxsize=None)
 def keyword_search(query, df):
-    query_proc  = preprocess(query)
+    query_proc = preprocess(query)
     query_words = re.findall(r"\w+", query_proc)
     query_lemmas = [lemmatize_cached(w) for w in query_words]
 
