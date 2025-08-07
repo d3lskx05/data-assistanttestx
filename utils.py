@@ -42,7 +42,8 @@ def lemmatize_cached(word):
     return lemmatize(word)
 
 SYNONYM_GROUPS = []
-
+["зп", "зарплатный", "зарплатная"],
+["наличные", "наличными", "наличка"]
 SYNONYM_DICT = {}
 for group in SYNONYM_GROUPS:
     lemmas = {lemmatize(w.lower()) for w in group}
