@@ -41,7 +41,7 @@ def lemmatize(word):
 def lemmatize_cached(word):
     return lemmatize(word)
 
-SYNONYM_GROUPS = []
+SYNONYM_GROUPS = [
 ["зп", "зарплатный", "зарплатная"],
 ["наличные", "наличными", "наличка"]
 SYNONYM_DICT = {}
