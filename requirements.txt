@@ -6,3 +6,4 @@ sentence-transformers
 requests
 pymorphy2
 gdown
+torch
