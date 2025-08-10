@@ -37,6 +37,7 @@ df = get_data()
 # 🔘 Все уникальные тематики
 all_topics = sorted({topic for topics in df['topics'] for topic in topics})
 selected_topics = st.multiselect("Фильтр по тематикам (независимо от поиска):", all_topics)
+filter_search_by_topics = st.checkbox("Искать только в выбранных тематиках", value=False)
 
 # 📂 Фразы по выбранным тематикам
 if selected_topics:
@@ -60,8 +61,13 @@ query = st.text_input("Введите ваш запрос:")
 
 if query:
     try:
-        results = semantic_search(query, df)
-        exact_results = keyword_search(query, df)
+        # Если включен фильтр, сужаем датафрейм для поиска
+        search_df = df
+        if filter_search_by_topics and selected_topics:
+            search_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
+
+        results = semantic_search(query, search_df)
+        exact_results = keyword_search(query, search_df)
 
         # Запись в лог
         log_query(
