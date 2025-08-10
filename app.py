@@ -4,6 +4,7 @@ import datetime
 import pandas as pd
 import os
 import csv
+import torch  # <-- используется для нарезки тензора эмбеддингов
 
 st.set_page_config(page_title="Проверка фраз ФЛ", layout="centered")
 st.title("🤖 Проверка фраз")
@@ -29,6 +30,7 @@ def log_query(query, semantic_count, keyword_count, status):
 def get_data():
     df = load_all_excels()
     model = get_model()
+    # рассчитываем эмбеддинги для полной таблицы и сохраняем в attrs
     df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
     return df
 
@@ -64,7 +66,34 @@ if query:
         # Если включен фильтр, сужаем датафрейм для поиска
         search_df = df
         if filter_search_by_topics and selected_topics:
-            search_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
+            mask = df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))
+            search_df = df[mask]
+
+            # Подрезаем/назначаем эмбеддинги для search_df, чтобы они соответствовали строкам
+            # Берём полный тензор из оригинального df.attrs['phrase_embs'] и индексируем его по индексам search_df
+            full_embs = df.attrs.get('phrase_embs', None)
+            if full_embs is not None:
+                try:
+                    indices = search_df.index.tolist()
+                    if isinstance(full_embs, torch.Tensor):
+                        if indices:
+                            # индексируем тензор по оригинальным индексам (они совпадают с порядком построения)
+                            search_df.attrs['phrase_embs'] = full_embs[indices]
+                        else:
+                            # пустой набор — создаём пустой тензор нужной ширины
+                            search_df.attrs['phrase_embs'] = full_embs.new_empty((0, full_embs.size(1)))
+                    else:
+                        # если это numpy array или похожее
+                        import numpy as np
+                        arr = np.asarray(full_embs)
+                        search_df.attrs['phrase_embs'] = arr[indices]
+                except Exception:
+                    # В крайнем случае — пересчитаем эмбеддинги для search_df (медленнее, но безопасно)
+                    model = get_model()
+                    if not search_df.empty:
+                        search_df.attrs['phrase_embs'] = model.encode(search_df['phrase_proc'].tolist(), convert_to_tensor=True)
+                    else:
+                        search_df.attrs['phrase_embs'] = None
 
         # Проверка на пустой результат
         if search_df.empty:
