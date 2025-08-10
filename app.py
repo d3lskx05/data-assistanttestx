@@ -66,51 +66,55 @@ if query:
         if filter_search_by_topics and selected_topics:
             search_df = df[df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))]
 
-        results = semantic_search(query, search_df)
-        exact_results = keyword_search(query, search_df)
-
-        # Запись в лог
-        log_query(
-            query,
-            semantic_count=len(results),
-            keyword_count=len(exact_results),
-            status="найдено" if results or exact_results else "не найдено"
-        )
-
-        if results:
-            st.markdown("### 🔍 Результаты умного поиска:")
-            for score, phrase_full, topics, comment in results:
-                with st.container():
-                    st.markdown(
-                        f"""<div style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin-bottom: 12px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
-                            <div style="font-size: 18px; font-weight: 600; color: #333;">🧠 {phrase_full}</div>
-                            <div style="margin-top: 4px; font-size: 14px; color: #666;">🔖 Тематики: <strong>{', '.join(topics)}</strong></div>
-                            <div style="margin-top: 2px; font-size: 13px; color: #999;">🎯 Релевантность: {score:.2f}</div>
-                        </div>""",
-                        unsafe_allow_html=True
-                    )
-                    if comment and str(comment).strip().lower() != "nan":
-                        with st.expander("💬 Комментарий", expanded=False):
-                            st.markdown(comment)
+        # Проверка на пустой результат
+        if search_df.empty:
+            st.warning("Нет данных для поиска по выбранным тематикам.")
         else:
-            st.warning("Совпадений не найдено в умном поиске.")
+            results = semantic_search(query, search_df)
+            exact_results = keyword_search(query, search_df)
 
-        if exact_results:
-            st.markdown("### 🧷 Точный поиск:")
-            for phrase, topics, comment in exact_results:
-                with st.container():
-                    st.markdown(
-                        f"""<div style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin-bottom: 12px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
-                            <div style="font-size: 18px; font-weight: 600; color: #333;">📌 {phrase}</div>
-                            <div style="margin-top: 4px; font-size: 14px; color: #666;">🔖 Тематики: <strong>{', '.join(topics)}</strong></div>
-                        </div>""",
-                        unsafe_allow_html=True
-                    )
-                    if comment and str(comment).strip().lower() != "nan":
-                        with st.expander("💬 Комментарий", expanded=False):
-                            st.markdown(comment)
-        else:
-            st.info("Ничего не найдено в точном поиске.")
+            # Запись в лог
+            log_query(
+                query,
+                semantic_count=len(results),
+                keyword_count=len(exact_results),
+                status="найдено" if results or exact_results else "не найдено"
+            )
+
+            if results:
+                st.markdown("### 🔍 Результаты умного поиска:")
+                for score, phrase_full, topics, comment in results:
+                    with st.container():
+                        st.markdown(
+                            f"""<div style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin-bottom: 12px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                                <div style="font-size: 18px; font-weight: 600; color: #333;">🧠 {phrase_full}</div>
+                                <div style="margin-top: 4px; font-size: 14px; color: #666;">🔖 Тематики: <strong>{', '.join(topics)}</strong></div>
+                                <div style="margin-top: 2px; font-size: 13px; color: #999;">🎯 Релевантность: {score:.2f}</div>
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
+                        if comment and str(comment).strip().lower() != "nan":
+                            with st.expander("💬 Комментарий", expanded=False):
+                                st.markdown(comment)
+            else:
+                st.warning("Совпадений не найдено в умном поиске.")
+
+            if exact_results:
+                st.markdown("### 🧷 Точный поиск:")
+                for phrase, topics, comment in exact_results:
+                    with st.container():
+                        st.markdown(
+                            f"""<div style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin-bottom: 12px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                                <div style="font-size: 18px; font-weight: 600; color: #333;">📌 {phrase}</div>
+                                <div style="margin-top: 4px; font-size: 14px; color: #666;">🔖 Тематики: <strong>{', '.join(topics)}</strong></div>
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
+                        if comment and str(comment).strip().lower() != "nan":
+                            with st.expander("💬 Комментарий", expanded=False):
+                                st.markdown(comment)
+            else:
+                st.info("Ничего не найдено в точном поиске.")
 
     except Exception as e:
         st.error(f"Ошибка при обработке запроса: {e}")
