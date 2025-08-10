@@ -1,36 +1,14 @@
 import streamlit as st
 from utils import load_all_excels, semantic_search, keyword_search, get_model
-import datetime
-import pandas as pd
-import os
-import csv
-import torch  # <-- используется для нарезки тензора эмбеддингов
+import torch  # для работы с тензорами
 
 st.set_page_config(page_title="Проверка фраз ФЛ", layout="centered")
 st.title("🤖 Проверка фраз")
-
-LOG_FILE = "query_log.csv"
-
-# 🔧 Логирование
-def log_query(query, semantic_count, keyword_count, status):
-    is_new = not os.path.exists(LOG_FILE)
-    with open(LOG_FILE, "a", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        if is_new:
-            writer.writerow(["time", "query", "semantic_results", "keyword_results", "status"])
-        writer.writerow([
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            query.strip(),
-            semantic_count,
-            keyword_count,
-            status
-        ])
 
 @st.cache_data
 def get_data():
     df = load_all_excels()
     model = get_model()
-    # рассчитываем эмбеддинги для полной таблицы и сохраняем в attrs
     df.attrs['phrase_embs'] = model.encode(df['phrase_proc'].tolist(), convert_to_tensor=True)
     return df
 
@@ -63,53 +41,29 @@ query = st.text_input("Введите ваш запрос:")
 
 if query:
     try:
-        # Если включен фильтр, сужаем датафрейм для поиска
         search_df = df
         if filter_search_by_topics and selected_topics:
             mask = df['topics'].apply(lambda topics: any(t in selected_topics for t in topics))
             search_df = df[mask]
 
-            # Подрезаем/назначаем эмбеддинги для search_df, чтобы они соответствовали строкам
-            # Берём полный тензор из оригинального df.attrs['phrase_embs'] и индексируем его по индексам search_df
+            # Согласуем эмбеддинги с фильтрованным DF
             full_embs = df.attrs.get('phrase_embs', None)
             if full_embs is not None:
-                try:
-                    indices = search_df.index.tolist()
-                    if isinstance(full_embs, torch.Tensor):
-                        if indices:
-                            # индексируем тензор по оригинальным индексам (они совпадают с порядком построения)
-                            search_df.attrs['phrase_embs'] = full_embs[indices]
-                        else:
-                            # пустой набор — создаём пустой тензор нужной ширины
-                            search_df.attrs['phrase_embs'] = full_embs.new_empty((0, full_embs.size(1)))
+                indices = search_df.index.tolist()
+                if isinstance(full_embs, torch.Tensor):
+                    if indices:
+                        search_df.attrs['phrase_embs'] = full_embs[indices]
                     else:
-                        # если это numpy array или похожее
-                        import numpy as np
-                        arr = np.asarray(full_embs)
-                        search_df.attrs['phrase_embs'] = arr[indices]
-                except Exception:
-                    # В крайнем случае — пересчитаем эмбеддинги для search_df (медленнее, но безопасно)
-                    model = get_model()
-                    if not search_df.empty:
-                        search_df.attrs['phrase_embs'] = model.encode(search_df['phrase_proc'].tolist(), convert_to_tensor=True)
-                    else:
-                        search_df.attrs['phrase_embs'] = None
+                        search_df.attrs['phrase_embs'] = full_embs.new_empty((0, full_embs.size(1)))
+                else:
+                    import numpy as np
+                    arr = np.asarray(full_embs)
+                    search_df.attrs['phrase_embs'] = arr[indices]
 
-        # Проверка на пустой результат
         if search_df.empty:
             st.warning("Нет данных для поиска по выбранным тематикам.")
         else:
             results = semantic_search(query, search_df)
-            exact_results = keyword_search(query, search_df)
-
-            # Запись в лог
-            log_query(
-                query,
-                semantic_count=len(results),
-                keyword_count=len(exact_results),
-                status="найдено" if results or exact_results else "не найдено"
-            )
-
             if results:
                 st.markdown("### 🔍 Результаты умного поиска:")
                 for score, phrase_full, topics, comment in results:
@@ -128,6 +82,7 @@ if query:
             else:
                 st.warning("Совпадений не найдено в умном поиске.")
 
+            exact_results = keyword_search(query, search_df)
             if exact_results:
                 st.markdown("### 🧷 Точный поиск:")
                 for phrase, topics, comment in exact_results:
@@ -147,17 +102,3 @@ if query:
 
     except Exception as e:
         st.error(f"Ошибка при обработке запроса: {e}")
-
-# Блок логов
-with st.expander("⚙️ Логи (для админов)", expanded=False):
-    if st.button("⬇️ Скачать логи"):
-        if os.path.exists(LOG_FILE):
-            with open(LOG_FILE, "rb") as f:
-                st.download_button("Скачать как CSV", f.read(), file_name="logs.csv", mime="text/csv")
-        else:
-            st.info("Файл логов отсутствует")
-
-    if st.button("🗑 Очистить логи"):
-        if os.path.exists(LOG_FILE):
-            open(LOG_FILE, "w").close()
-        st.success("Логи очищены!")
