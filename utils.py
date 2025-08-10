@@ -14,7 +14,7 @@ import os
 def get_model():
     model_path = "fine_tuned_model"
     model_zip  = "fine_tuned_model.zip"
-    file_id    = "1bZoykt0Sj2GRPvLRC_3Z7Wt8g4AGT34R"  # при необходимости замените
+    file_id    = "1RR15OMLj9vfSrVa1HN-dRU-4LbkdbRRf"  # при необходимости замените
 
     if not os.path.exists(model_path):
         import gdown
@@ -42,6 +42,7 @@ def lemmatize_cached(word):
     return lemmatize(word)
 
 SYNONYM_GROUPS = []
+
 SYNONYM_DICT = {}
 for group in SYNONYM_GROUPS:
     lemmas = {lemmatize(w.lower()) for w in group}
